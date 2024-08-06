@@ -19,165 +19,149 @@ class UI {
   // submit budget method
   submitBudgetForm() {
     const value = this.budgetInput.value;
-    if (value === '' || value < 0) {
-      this.budgetFeedback.classList.add('showItem');
-      this.budgetFeedback.innerHTML = `<p>Value cannot be empty or negative</p>`;
-      const self = this;
-      setTimeout(function () {
-        self.budgetFeedback.classList.remove('showItem');
-      }, 2500);
+    if (value === "" || value < 0) {
+      this.showFeedback(
+        this.budgetFeedback,
+        "Value cannot be empty or negative"
+      );
     } else {
       this.budgetAmount.textContent = value;
-      this.budgetInput.value = '';
+      this.budgetInput.value = "";
       this.showBalance();
     }
   }
 
-  // show Balance
+  // show feedback
+  showFeedback(element, message) {
+    element.classList.add("showItem");
+    element.innerHTML = `<p>${message}</p>`;
+    setTimeout(() => element.classList.remove("showItem"), 2500);
+  }
+
+  // show balance
   showBalance() {
     const expense = this.totalExpense();
     const total = parseInt(this.budgetAmount.textContent) - expense;
     this.balanceAmount.textContent = total;
+    this.updateBalanceColor(total);
+  }
+
+  // update balance color
+  updateBalanceColor(total) {
+    this.balance.classList.remove("showGreen", "showBlack", "showRed");
     if (total < 0) {
-      this.balance.classList.remove('showGreen', 'showBlack');
-      this.balance.classList.add('showRed');
+      this.balance.classList.add("showRed");
     } else if (total === 0) {
-      this.balance.classList.remove('showGreen', 'showRed');
-      this.balance.classList.add('showBlack');
+      this.balance.classList.add("showBlack");
     } else {
-      this.balance.classList.remove('showRed', 'showBlack');
-      this.balance.classList.add('showGreen');
+      this.balance.classList.add("showGreen");
     }
   }
 
   // total expense
   totalExpense() {
-    let total = 0;
-    if (this.itemList.length > 0) {
-      total = this.itemList.reduce(function (acc, curr) {
-        acc += curr.amount;
-        return acc;
-      }, 0);
-    }
+    const total = this.itemList.reduce((acc, curr) => acc + curr.amount, 0);
     this.expenseAmount.textContent = total;
     return total;
   }
 
-  // submit Expense form
+  // submit expense form
   submitExpenseForm() {
     const expense = this.expenseInput.value;
     const amount = this.amountInput.value;
 
-    if (expense === '' || amount === '' || amount < 0) {
-      this.expenseFeedback.classList.add('showItem');
-      this.expenseFeedback.innerHTML = `<p>Values cannot be empty or negative</p>`;
-      const self = this;
-      setTimeout(function () {
-        self.expenseFeedback.classList.remove('showItem');
-      }, 2500);
+    if (expense === "" || amount === "" || amount < 0) {
+      this.showFeedback(
+        this.expenseFeedback,
+        "Values cannot be empty or negative"
+      );
     } else {
-      let amnt = parseInt(amount);
-      this.expenseInput.value = '';
-      this.amountInput.value = '';
-      let expns = {
-        id: this.itemID,
+      const expns = {
+        id: this.itemID++,
         title: expense,
-        amount: amnt
+        amount: parseInt(amount),
       };
-      this.itemID++;
       this.itemList.push(expns);
       this.addExpense(expns);
       this.showBalance();
+      this.clearExpenseInputs();
     }
+  }
+
+  // clear expense inputs
+  clearExpenseInputs() {
+    this.expenseInput.value = "";
+    this.amountInput.value = "";
   }
 
   // add expense
   addExpense(expense) {
-    const div = document.createElement('div');
-    div.classList.add('expense');
-    div.innerHTML = `<div class="expense-item d-flex justify-content-between align-items-baseline">
-
-    <h6 class="expense-title mb-0 text-uppercase list-item">- ${expense.title}</h6>
-    <h5 class="expense-amount mb-0 list-item">${expense.amount}</h5>
-
-    <div class="expense-icons list-item">
-
-     <a href="#" class="edit-icon mx-2" data-id="${expense.id}">
-      <i class="fas fa-edit"></i>
-     </a>
-     <a href="#" class="delete-icon" data-id="${expense.id}">
-      <i class="fas fa-trash"></i>
-     </a>
-    </div>
-   </div>
-`;
+    const div = document.createElement("div");
+    div.classList.add("expense");
+    div.innerHTML = `
+      <div class="expense-item d-flex justify-content-between align-items-baseline">
+        <h6 class="expense-title mb-0 text-uppercase list-item">- ${expense.title}</h6>
+        <h5 class="expense-amount mb-0 list-item">${expense.amount}</h5>
+        <div class="expense-icons list-item">
+          <a href="#" class="edit-icon mx-2" data-id="${expense.id}">
+            <i class="fas fa-edit"></i>
+          </a>
+          <a href="#" class="delete-icon" data-id="${expense.id}">
+            <i class="fas fa-trash"></i>
+          </a>
+        </div>
+      </div>`;
     this.expenseList.appendChild(div);
   }
 
   // edit expense
   editExpense(element) {
-    let id = parseInt(element.dataset.id);
-    let parent = element.parentElement.parentElement.parentElement;
-
-    // remove from dom
-    this.expenseList.removeChild(parent);
-    //remove item from list
-    let expense = this.itemList.filter(function (item) {
-      return item.id === id;
-    });
-
-    let itemListTemp = this.itemList.filter(function (item) {
-      return item.id !== id;
-    });
-
-    this.itemList = itemListTemp;
+    const id = parseInt(element.dataset.id);
+    const expense = this.itemList.find((item) => item.id === id);
+    this.removeExpenseElement(element);
+    this.itemList = this.itemList.filter((item) => item.id !== id);
     this.showBalance();
-
-    // show values in expense form
-    this.expenseInput.value = expense[0].title;
-    this.amountInput.value = expense[0].amount;
-
+    this.expenseInput.value = expense.title;
+    this.amountInput.value = expense.amount;
   }
 
+  // delete expense
   deleteExpense(element) {
     this.editExpense(element);
-    this.expenseInput.value = '';
-    this.amountInput.value = '';
+    this.clearExpenseInputs();
+  }
+
+  // remove expense element
+  removeExpenseElement(element) {
+    const parent = element.closest(".expense");
+    this.expenseList.removeChild(parent);
   }
 }
 
+// event listeners
 function eventListeners() {
-
-  const budgetForm = document.getElementById('budget-form');
-  const expenseForm = document.getElementById('expense-form');
-  const expenseList = document.getElementById('expense-list');
-
-  // new instance of UI class
   const ui = new UI();
 
-  // budget form submit
-  budgetForm.addEventListener('submit', function (event) {
-
+  document.getElementById("budget-form").addEventListener("submit", (event) => {
     event.preventDefault();
     ui.submitBudgetForm();
   });
 
-  // expense form submit
-  expenseForm.addEventListener('submit', function (event) {
+  document
+    .getElementById("expense-form")
+    .addEventListener("submit", (event) => {
+      event.preventDefault();
+      ui.submitExpenseForm();
+    });
 
-    event.preventDefault();
-    ui.submitExpenseForm();
-  });
-  // expense list click
-  expenseList.addEventListener('click', function (event) {
-    if (event.target.parentElement.classList.contains('edit-icon')) {
+  document.getElementById("expense-list").addEventListener("click", (event) => {
+    if (event.target.parentElement.classList.contains("edit-icon")) {
       ui.editExpense(event.target.parentElement);
-    } else if (event.target.parentElement.classList.contains('delete-icon')) {
+      ui.showFeedback(ui.expenseFeedback, "Edit your expense here");
+    } else if (event.target.parentElement.classList.contains("delete-icon")) {
       ui.deleteExpense(event.target.parentElement);
     }
   });
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-  eventListeners();
-});
+document.addEventListener("DOMContentLoaded", eventListeners);
