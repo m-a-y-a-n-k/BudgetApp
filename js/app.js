@@ -98,19 +98,42 @@ class UI {
   addExpense(expense) {
     const div = document.createElement("div");
     div.classList.add("expense");
-    div.innerHTML = `
-      <div class="expense-item d-flex justify-content-between align-items-baseline">
-        <h6 class="expense-title mb-0 text-uppercase list-item">- ${expense.title}</h6>
-        <h5 class="expense-amount mb-0 list-item">${expense.amount}</h5>
-        <div class="expense-icons list-item">
-          <a href="#" class="edit-icon mx-2" data-id="${expense.id}">
-            <i class="fas fa-edit"></i>
-          </a>
-          <a href="#" class="delete-icon" data-id="${expense.id}">
-            <i class="fas fa-trash"></i>
-          </a>
-        </div>
-      </div>`;
+    const expenseItem = document.createElement("div");
+    expenseItem.className =
+      "expense-item d-flex justify-content-between align-items-baseline";
+
+    const titleElement = document.createElement("h6");
+    titleElement.className = "expense-title mb-0 text-uppercase list-item";
+    titleElement.textContent = `- ${expense.title}`;
+
+    const amountElement = document.createElement("h5");
+    amountElement.className = "expense-amount mb-0 list-item";
+    amountElement.textContent = expense.amount;
+
+    const iconsDiv = document.createElement("div");
+    iconsDiv.className = "expense-icons list-item";
+
+    const editLink = document.createElement("a");
+    editLink.href = "#";
+    editLink.className = "edit-icon mx-2";
+    editLink.dataset.id = expense.id;
+    editLink.innerHTML = '<i class="fas fa-edit"></i>';
+
+    const deleteLink = document.createElement("a");
+    deleteLink.href = "#";
+    deleteLink.className = "delete-icon";
+    deleteLink.dataset.id = expense.id;
+    deleteLink.innerHTML = '<i class="fas fa-trash"></i>';
+
+    iconsDiv.appendChild(editLink);
+    iconsDiv.appendChild(deleteLink);
+
+    expenseItem.appendChild(titleElement);
+    expenseItem.appendChild(amountElement);
+    expenseItem.appendChild(iconsDiv);
+
+    div.appendChild(expenseItem);
+
     this.expenseList.appendChild(div);
   }
 
