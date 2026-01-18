@@ -20,26 +20,68 @@
   </head>
 
   <body>
-    <div class="container-fluid">
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <div class="container-fluid app-shell">
       <div class="row">
-        <div class="col-11 mx-auto pt-3">
+        <main id="main" class="col-11 mx-auto py-4" role="main">
           <!-- title -->
-          <h3 class="text-uppercase mb-4">budget app</h3>
+          <header class="mb-4">
+            <h1 class="app-title mb-1">Budget App</h1>
+            <p class="app-subtitle mb-0">
+              Add your income, track expenses, and see your savings rate.
+            </p>
+            <div class="toolbar mt-3">
+              <div class="toolbar__group">
+                <label class="form-label mb-1" for="month-select">Month</label>
+                <input
+                  id="month-select"
+                  class="form-control"
+                  type="month"
+                  name="month"
+                />
+              </div>
+              <div class="toolbar__group toolbar__actions">
+                <button id="export-json" type="button" class="btn btn-light">
+                  Export JSON
+                </button>
+                <button id="reset-month" type="button" class="btn btn-outline-danger">
+                  Reset month
+                </button>
+              </div>
+            </div>
+          </header>
           <div class="row">
             <div class="col-md-5 my-3">
               <!-- budget feedback -->
-              <div class="budget-feedback alert alert-danger text-capitalize">
-                budget feedback
+              <div
+                class="budget-feedback alert alert-danger"
+                role="alert"
+                aria-live="assertive"
+                aria-atomic="true"
+              >
+                Income feedback
               </div>
               <!-- budget form -->
-              <form id="budget-form" class="budget-form">
-                <h5 class="text-capitalize">What's your budget ?</h5>
+              <form id="budget-form" class="budget-form" novalidate>
+                <h2 class="section-title mb-3">Income</h2>
                 <div class="form-group">
+                  <label class="form-label" for="budget-input"
+                    >Monthly income</label
+                  >
                   <input
                     type="number"
                     class="form-control budget-input"
                     id="budget-input"
+                    name="budget"
+                    inputmode="decimal"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 2500.00"
+                    aria-describedby="budget-help"
                   />
+                  <small id="budget-help" class="form-text text-muted"
+                    >Enter your monthly income (no negatives).</small
+                  >
                 </div>
                 <!-- submit button -->
                 <button
@@ -47,39 +89,56 @@
                   class="btn text-capitalize budget-submit"
                   id="budget-submit"
                 >
-                  calculate
+                  Set income
                 </button>
               </form>
             </div>
             <div class="col-md-7">
               <!-- app info -->
               <div class="row my-3">
-                <div class="col-4 text-center mb-2">
-                  <h6 class="text-uppercase info-title">budget</h6>
-                  <span class="budget-icon"
+                <div class="col-6 col-md-3 text-center mb-3">
+                  <h2 class="info-title">Income</h2>
+                  <span class="budget-icon" aria-hidden="true"
                     ><i class="fas fa-money-bill-alt"></i
                   ></span>
-                  <h4 class="text-uppercase mt-2 budget" id="budget">
+                  <div class="info-value budget" id="budget" aria-label="Income">
                     <span>$ </span><span id="budget-amount">0</span>
-                  </h4>
+                  </div>
                 </div>
-                <div class="col-4 text-center">
-                  <h6 class="text-uppercase info-title">expenses</h6>
-                  <span class="expense-icon"
+                <div class="col-6 col-md-3 text-center mb-3">
+                  <h2 class="info-title">Expenses</h2>
+                  <span class="expense-icon" aria-hidden="true"
                     ><i class="far fa-credit-card"></i
                   ></span>
-                  <h4 class="text-uppercase mt-2 expense" id="expense">
+                  <div
+                    class="info-value expense"
+                    id="expense"
+                    aria-label="Expenses"
+                  >
                     <span>$ </span><span id="expense-amount">0</span>
-                  </h4>
+                  </div>
                 </div>
-                <div class="col-4 text-center">
-                  <h6 class="text-uppercase info-title">balance</h6>
-                  <span class="balance-icon"
+                <div class="col-6 col-md-3 text-center mb-3">
+                  <h2 class="info-title">Balance</h2>
+                  <span class="balance-icon" aria-hidden="true"
                     ><i class="fas fa-dollar-sign"></i
                   ></span>
-                  <h4 class="text-uppercase mt-2 balance" id="balance">
+                  <div
+                    class="info-value balance"
+                    id="balance"
+                    aria-label="Balance"
+                  >
                     <span>$ </span><span id="balance-amount">0</span>
-                  </h4>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 text-center mb-3">
+                  <h2 class="info-title">Savings rate</h2>
+                  <span class="balance-icon" aria-hidden="true"
+                    ><i class="fas fa-chart-line"></i
+                  ></span>
+                  <div class="info-value balance" aria-label="Savings rate">
+                    <span id="savings-rate-amount">—</span><span>%</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -88,46 +147,179 @@
           <div class="row">
             <div class="col-md-5 my-3">
               <!-- expense feedback -->
-              <div class="expense-feedback alert alert-danger text-capitalize">
-                expense feedback
+              <div
+                class="expense-feedback alert alert-danger"
+                role="alert"
+                aria-live="assertive"
+                aria-atomic="true"
+              >
+                Expense feedback
               </div>
               <!-- expense form -->
-              <form id="expense-form" class="expense-form">
-                <h5 class="text-capitalize">What type of expense ?</h5>
+              <form id="expense-form" class="expense-form" novalidate>
+                <div class="d-flex justify-content-between align-items-baseline">
+                  <h2 class="section-title mb-3">Expenses</h2>
+                  <p id="expense-mode" class="mode-pill" aria-live="polite">
+                    Adding
+                  </p>
+                </div>
                 <div class="form-group">
+                  <label class="form-label" for="expense-input"
+                    >Expense name</label
+                  >
                   <input
                     type="text"
                     class="form-control expense-input"
                     id="expense-input"
+                    name="expenseTitle"
+                    autocomplete="off"
+                    placeholder="e.g. Groceries"
+                    aria-describedby="expense-help"
                   />
+                  <small id="expense-help" class="form-text text-muted"
+                    >Use a short name you’ll recognize later.</small
+                  >
                 </div>
-                <h5 class="text-capitalize">What's your expense amount ?</h5>
                 <div class="form-group">
+                  <label class="form-label" for="amount-input"
+                    >Amount</label
+                  >
                   <input
                     type="number"
                     class="form-control expense-input"
                     id="amount-input"
+                    name="expenseAmount"
+                    inputmode="decimal"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 42.50"
                   />
                 </div>
+                <div class="form-group">
+                  <label class="form-label" for="category-input">Category</label>
+                  <select
+                    id="category-input"
+                    class="form-control expense-input"
+                    name="expenseCategory"
+                  >
+                    <option value="Groceries">Groceries</option>
+                    <option value="Rent/Mortgage">Rent/Mortgage</option>
+                    <option value="Utilities">Utilities</option>
+                    <option value="Dining">Dining</option>
+                    <option value="Transport">Transport</option>
+                    <option value="Health">Health</option>
+                    <option value="Shopping">Shopping</option>
+                    <option value="Subscriptions">Subscriptions</option>
+                    <option value="Travel">Travel</option>
+                    <option value="Other" selected>Other</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <div class="form-group col-7 pr-2">
+                    <label class="form-label" for="date-input">Date</label>
+                    <input
+                      id="date-input"
+                      type="date"
+                      class="form-control expense-input"
+                      name="expenseDate"
+                    />
+                  </div>
+                  <div class="form-group col-5 pl-2 d-flex align-items-end">
+                    <div class="form-check mb-2">
+                      <input
+                        id="recurring-input"
+                        class="form-check-input"
+                        type="checkbox"
+                        name="expenseRecurring"
+                      />
+                      <label class="form-check-label" for="recurring-input">
+                        Recurring
+                      </label>
+                    </div>
+                  </div>
+                </div>
                 <!-- submit button -->
-                <button
-                  type="submit"
-                  class="btn text-capitalize expense-submit"
-                  id="expense-submit"
-                >
-                  add expense
-                </button>
+                <div class="d-flex align-items-center gap-2">
+                  <button
+                    type="submit"
+                    class="btn text-capitalize expense-submit"
+                    id="expense-submit"
+                  >
+                    Add expense
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-link expense-cancel px-0"
+                    id="expense-cancel"
+                    hidden
+                  >
+                    Cancel edit
+                  </button>
+                </div>
               </form>
             </div>
             <div class="col-md-7 my-3">
+              <div class="expense-tools mb-3">
+                <div class="form-row">
+                  <div class="form-group col-12 col-lg-5 pr-lg-2">
+                    <label class="form-label" for="search-input">Search</label>
+                    <input
+                      id="search-input"
+                      type="search"
+                      class="form-control"
+                      placeholder="Search expenses…"
+                      autocomplete="off"
+                    />
+                  </div>
+                  <div class="form-group col-6 col-lg-3 px-lg-2">
+                    <label class="form-label" for="filter-category">Category</label>
+                    <select id="filter-category" class="form-control">
+                      <option value="">All</option>
+                      <option value="Groceries">Groceries</option>
+                      <option value="Rent/Mortgage">Rent/Mortgage</option>
+                      <option value="Utilities">Utilities</option>
+                      <option value="Dining">Dining</option>
+                      <option value="Transport">Transport</option>
+                      <option value="Health">Health</option>
+                      <option value="Shopping">Shopping</option>
+                      <option value="Subscriptions">Subscriptions</option>
+                      <option value="Travel">Travel</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div class="form-group col-6 col-lg-4 pl-lg-2">
+                    <label class="form-label" for="sort-by">Sort</label>
+                    <select id="sort-by" class="form-control">
+                      <option value="date_desc" selected>Newest</option>
+                      <option value="date_asc">Oldest</option>
+                      <option value="amount_desc">Amount (high → low)</option>
+                      <option value="amount_asc">Amount (low → high)</option>
+                      <option value="title_asc">Title (A → Z)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="category-breakdown mb-3" aria-label="Category totals">
+                <div class="d-flex justify-content-between align-items-baseline">
+                  <h2 class="section-title mb-2">Category totals</h2>
+                  <small class="text-muted" id="category-totals-note"
+                    >This month</small
+                  >
+                </div>
+                <div id="category-totals" class="category-totals"></div>
+              </div>
               <!-- expense list -->
-              <div class="expense-list" id="expense-list">
+              <div class="expense-list" id="expense-list" aria-label="Expense list">
                 <div
                   class="expense-list__info d-flex justify-content-between text-capitalize"
                 >
-                  <h5 class="list-item">expense title</h5>
-                  <h5 class="list-item">expense value</h5>
-                  <h5 class="list-item">expense actions</h5>
+                  <h3 class="list-item">Title</h3>
+                  <h3 class="list-item">Amount</h3>
+                  <h3 class="list-item">Actions</h3>
+                </div>
+                <div id="expense-empty" class="empty-state" role="status" aria-live="polite">
+                  No expenses yet. Add your first expense to get started.
                 </div>
                 <!-- single expense -->
 
@@ -153,7 +345,7 @@
               </div>
             </div>
           </div>
-        </div>
+        </main>
       </div>
     </div>
 

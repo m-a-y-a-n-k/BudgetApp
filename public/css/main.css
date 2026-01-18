@@ -1,14 +1,200 @@
 :root {
-  --mainWhite: #f5f5f5f5;
-  --mainDark: #333333;
-  --mainGreen: #317b22;
-  --mainRed: #b80c09;
-  --mainBlue: #05668d;
+  color-scheme: light dark;
+
+  /* base */
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --text: #0f172a;
+  --muted: #475569;
+  --border: rgba(15, 23, 42, 0.12);
+
+  /* accents */
+  --primary: #2563eb;
+  --success: #16a34a;
+  --danger: #dc2626;
+
+  /* legacy mappings (keeps existing class names working) */
+  --mainWhite: var(--bg);
+  --mainDark: var(--text);
+  --mainGreen: var(--success);
+  --mainRed: var(--danger);
+  --mainBlue: var(--primary);
+
+  /* shape + motion */
+  --radius: 14px;
+  --shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  --shadow-sm: 0 6px 18px rgba(15, 23, 42, 0.08);
+  --ring: rgba(37, 99, 235, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220;
+    --surface: #0f172a;
+    --text: #e5e7eb;
+    --muted: #9aa4b2;
+    --border: rgba(226, 232, 240, 0.14);
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 6px 18px rgba(0, 0, 0, 0.25);
+    --ring: rgba(96, 165, 250, 0.35);
+  }
 }
 
 body {
-  background: var(--mainWhite);
-  color: var(--mainDark);
+  background: radial-gradient(
+      1200px 600px at 10% 0%,
+      rgba(37, 99, 235, 0.12),
+      rgba(0, 0, 0, 0)
+    ),
+    radial-gradient(
+      1000px 500px at 90% 10%,
+      rgba(22, 163, 74, 0.12),
+      rgba(0, 0, 0, 0)
+    ),
+    var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji";
+  line-height: 1.5;
+}
+
+.app-shell {
+  max-width: 1200px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.toolbar__group {
+  min-width: 220px;
+}
+
+.toolbar__actions {
+  display: flex;
+  gap: 0.5rem;
+  min-width: auto;
+}
+
+.expense-tools {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 0.9rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.category-breakdown {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.category-totals {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.category-row {
+  padding: 0.4rem 0.5rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.03);
+  border: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  .category-row {
+    background: rgba(226, 232, 240, 0.05);
+    border: 1px solid rgba(226, 232, 240, 0.08);
+  }
+}
+
+.app-title {
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.app-subtitle {
+  color: var(--muted);
+}
+
+.section-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.form-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mode-pill {
+  font-size: 0.85rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.04);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mode-pill {
+    background: rgba(226, 232, 240, 0.06);
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.75rem;
+  transform: translateY(-200%);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  z-index: 9999;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Better focus visibility (keyboard users) */
+:focus-visible {
+  outline: 3px solid var(--ring) !important;
+  outline-offset: 2px;
+}
+
+.form-control {
+  border-radius: 12px;
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.form-control::placeholder {
+  color: rgba(71, 85, 105, 0.8);
+}
+
+@media (prefers-color-scheme: dark) {
+  .form-control::placeholder {
+    color: rgba(154, 164, 178, 0.85);
+  }
+}
+
+.form-text {
+  color: var(--muted) !important;
 }
 .budget-feedback,
 .expense-feedback {
@@ -16,39 +202,47 @@ body {
 }
 
 .budget-form {
-  border: 0.15rem solid var(--mainGreen);
-  padding: 1rem;
-  border-radius: 0.25rem;
+  border: 1px solid var(--border);
+  padding: 1.1rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 .expense-form {
-  border: 0.15rem solid var(--mainRed);
-  padding: 1rem;
-  border-radius: 0.25rem;
+  border: 1px solid var(--border);
+  padding: 1.1rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 .budget-submit {
-  background: transparent;
-  border: 0.1rem solid var(--mainGreen);
-  color: var(--mainGreen);
+  background: var(--success);
+  border: 1px solid var(--success);
+  color: #fff;
+  border-radius: 12px;
+  padding: 0.55rem 0.9rem;
 }
 .expense-submit {
-  background: transparent;
-  border: 0.1rem solid var(--mainRed);
-  color: var(--mainRed);
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  color: #fff;
+  border-radius: 12px;
+  padding: 0.55rem 0.9rem;
 }
 .expense-submit:hover {
-  background: var(--mainRed);
-  color: var(--mainWhite);
+  filter: brightness(0.95);
+  color: #fff;
 }
 .budget-submit:hover {
-  background: var(--mainGreen);
-  color: var(--mainDark);
+  filter: brightness(0.95);
+  color: #fff;
 }
 
 .budget-input {
-  border: 0.05rem solid var(--mainGreen) !important;
+  border-color: var(--border) !important;
 }
 .expense-input {
-  border: 0.05rem solid var(--mainRed) !important;
+  border-color: var(--border) !important;
 }
 .expense-amount,
 .expense-title {
@@ -59,40 +253,59 @@ body {
   cursor: pointer;
   font-size: 1rem;
   text-decoration: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border-radius: 10px;
 }
 .delete-icon {
   color: var(--mainRed);
   cursor: pointer;
   font-size: 1rem;
   text-decoration: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border-radius: 10px;
 }
 .edit-icon:hover {
   color: var(--mainBlue);
+  background: rgba(37, 99, 235, 0.08);
 }
 .delete-icon:hover {
   color: var(--mainRed);
+  background: rgba(220, 38, 38, 0.08);
 }
 .showItem {
   display: block;
 }
 .info-title {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.info-value {
+  font-size: 1.6rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
 }
 .budget {
-  font-size: 1.6rem;
   color: var(--mainGreen);
 }
 .expense {
-  font-size: 1.6rem;
   color: var(--mainRed);
 }
 .balance {
-  font-size: 1.6rem;
+  color: var(--text);
 }
 .budget-icon,
 .expense-icon,
 .balance-icon {
-  font-size: 2.5rem;
+  font-size: 2.25rem;
   color: var(--mainBlue);
 }
 .showRed {
@@ -105,21 +318,13 @@ body {
   color: var(--mainDark);
 }
 @media screen and (min-width: 992px) {
-  .budget {
-    font-size: 2.6rem;
-    color: var(--mainGreen);
-  }
-  .expense {
-    font-size: 2.6rem;
-    color: var(--mainRed);
-  }
-  .balance {
-    font-size: 2.6rem;
+  .info-value {
+    font-size: 2.4rem;
   }
   .budget-icon,
   .expense-icon,
   .balance-icon {
-    font-size: 3.5rem;
+    font-size: 3.25rem;
     color: var(--mainBlue);
   }
 }
@@ -129,4 +334,49 @@ body {
 }
 .expense-item {
   height: 2.7rem;
+}
+
+.expense-list {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.expense-list__info {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.02);
+}
+
+@media (prefers-color-scheme: dark) {
+  .expense-list__info {
+    background: rgba(226, 232, 240, 0.04);
+  }
+}
+
+.expense {
+  padding: 0.2rem 1rem;
+}
+
+.empty-state {
+  padding: 1rem;
+  color: var(--muted);
+}
+
+.expense-cancel {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.expense-cancel:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+/* Disabled buttons should look disabled */
+button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
