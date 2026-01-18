@@ -1,4 +1,6 @@
 const STORAGE_KEY = "budgetapp:data:v1";
+const CURRENT_VERSION = 2;
+const ALL_ACCOUNTS = "all";
 
 function formatMonthKey(date) {
   const y = date.getFullYear();
@@ -26,14 +28,63 @@ class AppStorage {
   load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { version: 1, currentMonth: formatMonthKey(new Date()), months: {} };
+      return {
+        version: CURRENT_VERSION,
+        currentMonth: formatMonthKey(new Date()),
+        activeAccountId: 1,
+        accounts: [
+          {
+            id: 1,
+            name: "Main",
+            type: "Checking",
+            archived: false,
+            createdAt: Date.now(),
+          },
+        ],
+        months: {},
+      };
     }
     const parsed = safeParseJSON(raw);
-    if (!parsed || parsed.version !== 1) {
-      return { version: 1, currentMonth: formatMonthKey(new Date()), months: {} };
+    if (!parsed || (parsed.version !== 1 && parsed.version !== 2)) {
+      return {
+        version: CURRENT_VERSION,
+        currentMonth: formatMonthKey(new Date()),
+        activeAccountId: 1,
+        accounts: [
+          {
+            id: 1,
+            name: "Main",
+            type: "Checking",
+            archived: false,
+            createdAt: Date.now(),
+          },
+        ],
+        months: {},
+      };
     }
+
+    if (parsed.version === 1) {
+      return migrateV1ToV2(parsed);
+    }
+
+    // v2 normalize
     if (!parsed.months) parsed.months = {};
     if (!parsed.currentMonth) parsed.currentMonth = formatMonthKey(new Date());
+    if (!Array.isArray(parsed.accounts) || parsed.accounts.length === 0) {
+      parsed.accounts = [
+        {
+          id: 1,
+          name: "Main",
+          type: "Checking",
+          archived: false,
+          createdAt: Date.now(),
+        },
+      ];
+    }
+    if (parsed.activeAccountId !== ALL_ACCOUNTS && typeof parsed.activeAccountId !== "number") {
+      parsed.activeAccountId = parsed.accounts[0].id;
+    }
+    parsed.version = CURRENT_VERSION;
     return parsed;
   }
 
@@ -47,6 +98,9 @@ class UI {
     this.storage = new AppStorage();
     this.state = this.storage.load();
     this.currentMonth = this.state.currentMonth;
+
+    this.activeAccountId =
+      typeof this.state.activeAccountId === "number" ? this.state.activeAccountId : 1;
 
     this.budgetFeedback = document.querySelector(".budget-feedback");
     this.expenseFeedback = document.querySelector(".expense-feedback");
@@ -67,11 +121,20 @@ class UI {
     this.expenseEmptyState = document.getElementById("expense-empty");
     this.categoryTotalsEl = document.getElementById("category-totals");
     this.monthSelect = document.getElementById("month-select");
+    this.accountSelect = document.getElementById("account-select");
+    this.manageAccountsBtn = document.getElementById("manage-accounts");
+    this.accountsPanel = document.getElementById("accounts-panel");
+    this.closeAccountsBtn = document.getElementById("close-accounts");
+    this.accountForm = document.getElementById("account-form");
+    this.accountNameInput = document.getElementById("account-name-input");
+    this.accountTypeInput = document.getElementById("account-type-input");
+    this.accountsList = document.getElementById("accounts-list");
     this.searchInput = document.getElementById("search-input");
     this.filterCategory = document.getElementById("filter-category");
     this.sortBy = document.getElementById("sort-by");
     this.exportBtn = document.getElementById("export-json");
     this.resetMonthBtn = document.getElementById("reset-month");
+    this.expenseAccountInput = document.getElementById("expense-account-input");
 
     this.itemList = [];
     this.itemID = 0;
@@ -83,35 +146,142 @@ class UI {
     // defaults
     if (this.dateInput && !this.dateInput.value) this.dateInput.value = todayISO();
     if (this.monthSelect) this.monthSelect.value = this.currentMonth;
+    this.ensureAccountBasics();
+    this.rebuildAccountSelects();
 
     this.ensureMonthInitialized(this.currentMonth);
     this.hydrateFromState(this.currentMonth);
   }
 
+  ensureAccountBasics() {
+    if (!Array.isArray(this.state.accounts) || this.state.accounts.length === 0) {
+      this.state.accounts = [
+        { id: 1, name: "Main", type: "Checking", archived: false, createdAt: Date.now() },
+      ];
+    }
+    const ids = new Set(this.state.accounts.map((a) => a.id));
+    if (
+      this.state.activeAccountId !== ALL_ACCOUNTS &&
+      (!Number.isFinite(Number(this.state.activeAccountId)) ||
+        !ids.has(Number(this.state.activeAccountId)))
+    ) {
+      this.activeAccountId = this.state.accounts[0].id;
+      this.state.activeAccountId = this.activeAccountId;
+      this.storage.save(this.state);
+    }
+  }
+
+  rebuildAccountSelects() {
+    this.rebuildAccountSelect();
+    this.rebuildExpenseAccountSelect();
+  }
+
+  rebuildAccountSelect() {
+    if (!this.accountSelect) return;
+    const sel = this.accountSelect;
+    sel.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value = ALL_ACCOUNTS;
+    optAll.textContent = "All accounts";
+    sel.appendChild(optAll);
+
+    for (const acct of this.state.accounts) {
+      const opt = document.createElement("option");
+      opt.value = String(acct.id);
+      opt.textContent = acct.archived ? `${acct.name} (${acct.type}) — archived` : `${acct.name} (${acct.type})`;
+      if (acct.archived) opt.disabled = false; // still selectable for viewing history
+      sel.appendChild(opt);
+    }
+
+    const desired =
+      this.state.activeAccountId === ALL_ACCOUNTS
+        ? ALL_ACCOUNTS
+        : String(this.state.activeAccountId ?? this.activeAccountId);
+    sel.value = desired;
+  }
+
+  rebuildExpenseAccountSelect() {
+    if (!this.expenseAccountInput) return;
+    const sel = this.expenseAccountInput;
+    sel.innerHTML = "";
+    for (const acct of this.state.accounts) {
+      const opt = document.createElement("option");
+      opt.value = String(acct.id);
+      opt.textContent = `${acct.name} (${acct.type})`;
+      if (acct.archived) opt.disabled = true;
+      sel.appendChild(opt);
+    }
+    const fallback = this.state.accounts.find((a) => !a.archived)?.id ?? this.state.accounts[0].id;
+    sel.value = String(
+      this.state.activeAccountId === ALL_ACCOUNTS ? fallback : this.state.activeAccountId
+    );
+  }
+
+  getMonthData(monthKey) {
+    return this.state.months[monthKey];
+  }
+
+  ensureMonthShapeV2(monthKey) {
+    const m = this.state.months[monthKey];
+    if (!m) return;
+    if (!m.accounts) {
+      // Shouldn't happen after migration, but keep resilient.
+      const income = Number.parseFloat(m.income) || 0;
+      const expenses = Array.isArray(m.expenses) ? m.expenses : [];
+      this.state.months[monthKey] = {
+        nextExpenseId:
+          expenses.length > 0
+            ? Math.max(...expenses.map((e) => (typeof e.id === "number" ? e.id : 0))) + 1
+            : 0,
+        accounts: {
+          1: {
+            income,
+            expenses: expenses.map((e) => ({ ...e, accountId: 1 })),
+          },
+        },
+      };
+    }
+  }
+
   ensureMonthInitialized(monthKey) {
     if (!this.state.months[monthKey]) {
-      // If new month, carry recurring expenses from previous month (best-effort)
+      // If new month, carry recurring expenses from previous month (best-effort), per account
       const prevKey = this.findPreviousMonthKey(monthKey);
       const prev = prevKey ? this.state.months[prevKey] : null;
-      const carried = prev?.expenses
-        ? prev.expenses
-            .filter((e) => e.recurring)
-            .map((e) => ({
-              ...e,
-              id: null, // re-assigned
-              date: `${monthKey}-01`,
-            }))
-        : [];
+      if (prev) this.ensureMonthShapeV2(prevKey);
 
-      // assign new ids
       let nextId = 0;
-      if (prev?.expenses?.length) {
-        nextId =
-          Math.max(...prev.expenses.map((e) => (typeof e.id === "number" ? e.id : 0))) +
-          1;
+      if (prev?.accounts) {
+        for (const acctId of Object.keys(prev.accounts)) {
+          const ex = prev.accounts[acctId]?.expenses || [];
+          for (const e of ex) nextId = Math.max(nextId, typeof e.id === "number" ? e.id + 1 : 0);
+        }
       }
-      const expenses = carried.map((e) => ({ ...e, id: nextId++ }));
-      this.state.months[monthKey] = { income: 0, expenses };
+
+      const accounts = {};
+      for (const acct of this.state.accounts) {
+        const prevAcct = prev?.accounts?.[String(acct.id)];
+        const carried = Array.isArray(prevAcct?.expenses)
+          ? prevAcct.expenses
+              .filter((e) => e.recurring)
+              .map((e) => ({
+                ...e,
+                id: nextId++,
+                accountId: acct.id,
+                date: `${monthKey}-01`,
+              }))
+          : [];
+        accounts[String(acct.id)] = { income: 0, expenses: carried };
+      }
+
+      this.state.months[monthKey] = { nextExpenseId: nextId, accounts };
+    }
+    // For existing months, ensure we have account buckets for any newly-added accounts.
+    this.ensureMonthShapeV2(monthKey);
+    const month = this.state.months[monthKey];
+    month.accounts = month.accounts || {};
+    for (const acct of this.state.accounts) {
+      if (!month.accounts[String(acct.id)]) month.accounts[String(acct.id)] = { income: 0, expenses: [] };
     }
     this.state.currentMonth = monthKey;
     this.currentMonth = monthKey;
@@ -129,15 +299,15 @@ class UI {
   }
 
   hydrateFromState(monthKey) {
+    this.ensureMonthShapeV2(monthKey);
     const month = this.state.months[monthKey];
-    const income = Number.parseFloat(month?.income) || 0;
+    const viewId =
+      this.state.activeAccountId === ALL_ACCOUNTS ? ALL_ACCOUNTS : Number(this.state.activeAccountId);
+
+    const income = this.getIncomeForView(month, viewId);
     this.budgetAmount.textContent = income ? income.toFixed(2) : "0";
 
-    this.itemList = Array.isArray(month?.expenses) ? month.expenses : [];
-    this.itemID =
-      this.itemList.length > 0
-        ? Math.max(...this.itemList.map((e) => (typeof e.id === "number" ? e.id : 0))) + 1
-        : 0;
+    this.itemID = typeof month?.nextExpenseId === "number" ? month.nextExpenseId : 0;
 
     this.refreshExpenseList();
     this.showBalance();
@@ -145,10 +315,51 @@ class UI {
   }
 
   persistMonth() {
-    const month = this.state.months[this.currentMonth];
-    month.income = Number.parseFloat(this.budgetAmount.textContent) || 0;
-    month.expenses = this.itemList;
     this.storage.save(this.state);
+  }
+
+  getIncomeForView(month, viewId) {
+    if (!month?.accounts) return 0;
+    if (viewId === ALL_ACCOUNTS) {
+      return Object.values(month.accounts).reduce(
+        (acc, a) => acc + (Number.parseFloat(a?.income) || 0),
+        0
+      );
+    }
+    const a = month.accounts[String(viewId)];
+    return Number.parseFloat(a?.income) || 0;
+  }
+
+  getExpensesForView(month, viewId) {
+    if (!month?.accounts) return [];
+    if (viewId === ALL_ACCOUNTS) {
+      const out = [];
+      for (const [acctId, data] of Object.entries(month.accounts)) {
+        const acctNum = Number(acctId);
+        const expenses = Array.isArray(data?.expenses) ? data.expenses : [];
+        for (const e of expenses) out.push({ ...e, accountId: e.accountId ?? acctNum });
+      }
+      return out;
+    }
+    const expenses = month.accounts[String(viewId)]?.expenses;
+    return Array.isArray(expenses) ? expenses.map((e) => ({ ...e, accountId: e.accountId ?? viewId })) : [];
+  }
+
+  findExpenseById(id) {
+    const month = this.state.months[this.currentMonth];
+    if (!month?.accounts) return null;
+    for (const [acctId, data] of Object.entries(month.accounts)) {
+      const expenses = Array.isArray(data?.expenses) ? data.expenses : [];
+      const idx = expenses.findIndex((e) => e.id === id);
+      if (idx !== -1) return { acctId: Number(acctId), idx, expense: expenses[idx] };
+    }
+    return null;
+  }
+
+  getAccountLabel(accountId) {
+    const acct = this.state.accounts.find((a) => a.id === accountId);
+    if (!acct) return `Account ${accountId}`;
+    return acct.archived ? `${acct.name} (archived)` : acct.name;
   }
 
   // submit budget method
@@ -161,6 +372,15 @@ class UI {
         "Value cannot be empty or negative"
       );
     } else {
+      if (this.state.activeAccountId === ALL_ACCOUNTS) {
+        this.showFeedback(this.budgetFeedback, "Select an account to set income.");
+        return;
+      }
+      const acctId = Number(this.state.activeAccountId);
+      const month = this.state.months[this.currentMonth];
+      this.ensureMonthShapeV2(this.currentMonth);
+      if (!month.accounts[String(acctId)]) month.accounts[String(acctId)] = { income: 0, expenses: [] };
+      month.accounts[String(acctId)].income = value;
       this.budgetAmount.textContent = value.toFixed(2);
       this.budgetInput.value = "";
       this.showBalance();
@@ -178,7 +398,10 @@ class UI {
   // show balance
   showBalance() {
     const expense = this.totalExpense();
-    const income = Number.parseFloat(this.budgetAmount.textContent) || 0;
+    const month = this.state.months[this.currentMonth];
+    const viewId =
+      this.state.activeAccountId === ALL_ACCOUNTS ? ALL_ACCOUNTS : Number(this.state.activeAccountId);
+    const income = this.getIncomeForView(month, viewId);
     const total = income - expense;
     this.balanceAmount.textContent = total;
     this.updateBalanceColor(total);
@@ -211,7 +434,11 @@ class UI {
 
   // total expense
   totalExpense() {
-    const total = this.itemList.reduce((acc, curr) => acc + curr.amount, 0);
+    const month = this.state.months[this.currentMonth];
+    const viewId =
+      this.state.activeAccountId === ALL_ACCOUNTS ? ALL_ACCOUNTS : Number(this.state.activeAccountId);
+    const items = this.getExpensesForView(month, viewId);
+    const total = items.reduce((acc, curr) => acc + (curr.amount || 0), 0);
     this.expenseAmount.textContent = total.toFixed(2);
     this.updateEmptyState();
     return total;
@@ -232,6 +459,8 @@ class UI {
     const category = this.categoryInput?.value || "Other";
     const date = this.dateInput?.value || todayISO();
     const recurring = Boolean(this.recurringInput?.checked);
+    const accountIdRaw = this.expenseAccountInput?.value;
+    const accountId = Number.parseInt(accountIdRaw || "", 10);
 
     if (
       expense.trim() === "" ||
@@ -245,28 +474,51 @@ class UI {
         "Values cannot be empty or negative"
       );
     } else {
+      if (!Number.isFinite(accountId)) {
+        this.showFeedback(this.expenseFeedback, "Select an account.");
+        return;
+      }
+      this.ensureMonthShapeV2(this.currentMonth);
+      const month = this.state.months[this.currentMonth];
+      if (!month.accounts[String(accountId)]) month.accounts[String(accountId)] = { income: 0, expenses: [] };
+
       if (this.isEditing && this.editingId !== null) {
-        const existing = this.itemList.find((item) => item.id === this.editingId);
-        if (existing) {
-          existing.title = expense.trim();
-          existing.amount = amount;
-          existing.category = category;
-          existing.date = date;
-          existing.recurring = recurring;
+        const found = this.findExpenseById(this.editingId);
+        if (found) {
+          const { acctId: fromAcctId, idx } = found;
+          const fromList = month.accounts[String(fromAcctId)]?.expenses || [];
+          const updated = {
+            ...fromList[idx],
+            title: expense.trim(),
+            amount,
+            category,
+            date,
+            recurring,
+            accountId,
+          };
+          if (fromAcctId === accountId) {
+            fromList[idx] = updated;
+          } else {
+            fromList.splice(idx, 1);
+            month.accounts[String(accountId)].expenses.push(updated);
+          }
           this.refreshExpenseList();
+          this.renderAccountsPanel();
         }
         this.exitEditMode();
       } else {
         const expns = {
-          id: this.itemID++,
+          id: month.nextExpenseId++,
           title: expense.trim(),
           amount,
           category,
           date,
           recurring,
+          accountId,
         };
-        this.itemList.push(expns);
+        month.accounts[String(accountId)].expenses.push(expns);
         this.addExpense(expns);
+        this.renderAccountsPanel();
       }
       this.showBalance();
       this.clearExpenseInputs();
@@ -282,6 +534,12 @@ class UI {
     if (this.categoryInput) this.categoryInput.value = "Other";
     if (this.dateInput) this.dateInput.value = todayISO();
     if (this.recurringInput) this.recurringInput.checked = false;
+    if (this.expenseAccountInput) {
+      const fallback = this.state.accounts.find((a) => !a.archived)?.id ?? this.state.accounts[0].id;
+      this.expenseAccountInput.value = String(
+        this.state.activeAccountId === ALL_ACCOUNTS ? fallback : this.state.activeAccountId
+      );
+    }
   }
 
   enterEditMode(expense) {
@@ -311,14 +569,18 @@ class UI {
   }
 
   getVisibleExpenses() {
-    let items = [...this.itemList];
+    const month = this.state.months[this.currentMonth];
+    const viewId =
+      this.state.activeAccountId === ALL_ACCOUNTS ? ALL_ACCOUNTS : Number(this.state.activeAccountId);
+    let items = this.getExpensesForView(month, viewId);
 
     const q = (this.searchInput?.value || "").trim().toLowerCase();
     if (q) {
       items = items.filter((e) => {
         const title = (e.title || "").toLowerCase();
         const category = (e.category || "").toLowerCase();
-        return title.includes(q) || category.includes(q);
+        const acct = this.getAccountLabel(e.accountId || 0).toLowerCase();
+        return title.includes(q) || category.includes(q) || acct.includes(q);
       });
     }
 
@@ -352,6 +614,9 @@ class UI {
     const titleElement = document.createElement("h6");
     titleElement.className = "expense-title mb-0 text-uppercase list-item";
     const meta = [];
+    if (this.state.activeAccountId === ALL_ACCOUNTS && expense.accountId) {
+      meta.push(this.getAccountLabel(expense.accountId));
+    }
     if (expense.category) meta.push(expense.category);
     if (expense.date) meta.push(expense.date);
     if (expense.recurring) meta.push("recurring");
@@ -399,13 +664,18 @@ class UI {
   // edit expense
   editExpense(element) {
     const id = parseInt(element.dataset.id);
-    const expense = this.itemList.find((item) => item.id === id);
+    const found = this.findExpenseById(id);
+    const expense = found?.expense;
     if (!expense) return;
     this.expenseInput.value = expense.title;
     this.amountInput.value = expense.amount;
     if (this.categoryInput) this.categoryInput.value = expense.category || "Other";
     if (this.dateInput) this.dateInput.value = expense.date || todayISO();
     if (this.recurringInput) this.recurringInput.checked = Boolean(expense.recurring);
+    if (this.expenseAccountInput) {
+      const acctId = expense.accountId ?? found?.acctId;
+      if (acctId) this.expenseAccountInput.value = String(acctId);
+    }
     this.enterEditMode(expense);
     this.expenseInput.focus();
   }
@@ -413,11 +683,17 @@ class UI {
   // delete expense
   deleteExpense(element) {
     const id = parseInt(element.dataset.id);
-    this.itemList = this.itemList.filter((item) => item.id !== id);
+    this.ensureMonthShapeV2(this.currentMonth);
+    const month = this.state.months[this.currentMonth];
+    const found = this.findExpenseById(id);
+    if (!found) return;
+    const list = month.accounts[String(found.acctId)]?.expenses || [];
+    list.splice(found.idx, 1);
     this.removeExpenseElement(element);
     this.showBalance();
     this.persistMonth();
     this.renderCategoryTotals();
+    this.renderAccountsPanel();
     if (this.isEditing && this.editingId === id) {
       this.exitEditMode();
       this.clearExpenseInputs();
@@ -434,7 +710,10 @@ class UI {
   renderCategoryTotals() {
     if (!this.categoryTotalsEl) return;
     const totals = new Map();
-    for (const e of this.itemList) {
+    const month = this.state.months[this.currentMonth];
+    const viewId =
+      this.state.activeAccountId === ALL_ACCOUNTS ? ALL_ACCOUNTS : Number(this.state.activeAccountId);
+    for (const e of this.getExpensesForView(month, viewId)) {
       const cat = e.category || "Other";
       totals.set(cat, (totals.get(cat) || 0) + (e.amount || 0));
     }
@@ -459,6 +738,98 @@ class UI {
       this.categoryTotalsEl.appendChild(row);
     }
   }
+
+  renderAccountsPanel() {
+    if (!this.accountsList) return;
+    const month = this.state.months[this.currentMonth];
+    this.ensureMonthShapeV2(this.currentMonth);
+    this.accountsList.innerHTML = "";
+
+    for (const acct of this.state.accounts) {
+      const data = month.accounts?.[String(acct.id)] || { income: 0, expenses: [] };
+      const income = Number.parseFloat(data.income) || 0;
+      const expense = (data.expenses || []).reduce((acc, e) => acc + (e.amount || 0), 0);
+      const bal = income - expense;
+
+      const row = document.createElement("div");
+      row.className = `account-row ${acct.archived ? "is-archived" : ""}`;
+      row.dataset.accountId = String(acct.id);
+
+      const top = document.createElement("div");
+      top.className = "d-flex justify-content-between align-items-start";
+
+      const left = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = "account-row__name";
+      name.textContent = acct.name;
+      const meta = document.createElement("div");
+      meta.className = "account-row__meta";
+      meta.textContent = `${acct.type}${acct.archived ? " • archived" : ""} • This month: $ ${bal.toFixed(
+        2
+      )}`;
+      left.appendChild(name);
+      left.appendChild(meta);
+
+      const actions = document.createElement("div");
+      actions.className = "account-row__actions";
+      const renameBtn = document.createElement("button");
+      renameBtn.type = "button";
+      renameBtn.className = "btn btn-light btn-sm";
+      renameBtn.textContent = "Rename";
+      renameBtn.dataset.action = "rename";
+
+      const archiveBtn = document.createElement("button");
+      archiveBtn.type = "button";
+      archiveBtn.className = "btn btn-outline-secondary btn-sm";
+      archiveBtn.textContent = acct.archived ? "Unarchive" : "Archive";
+      archiveBtn.dataset.action = "archive";
+
+      actions.appendChild(renameBtn);
+      actions.appendChild(archiveBtn);
+
+      top.appendChild(left);
+      top.appendChild(actions);
+      row.appendChild(top);
+
+      this.accountsList.appendChild(row);
+    }
+  }
+}
+
+function migrateV1ToV2(v1) {
+  const defaultAccount = {
+    id: 1,
+    name: "Main",
+    type: "Checking",
+    archived: false,
+    createdAt: Date.now(),
+  };
+  const out = {
+    version: CURRENT_VERSION,
+    currentMonth: v1.currentMonth || formatMonthKey(new Date()),
+    activeAccountId: 1,
+    accounts: [defaultAccount],
+    months: {},
+  };
+  const months = v1.months || {};
+  for (const [monthKey, m] of Object.entries(months)) {
+    const income = Number.parseFloat(m?.income) || 0;
+    const expenses = Array.isArray(m?.expenses) ? m.expenses : [];
+    const nextExpenseId =
+      expenses.length > 0
+        ? Math.max(...expenses.map((e) => (typeof e.id === "number" ? e.id : 0))) + 1
+        : 0;
+    out.months[monthKey] = {
+      nextExpenseId,
+      accounts: {
+        1: {
+          income,
+          expenses: expenses.map((e) => ({ ...e, accountId: 1 })),
+        },
+      },
+    };
+  }
+  return out;
 }
 
 // event listeners
@@ -492,6 +863,99 @@ function eventListeners() {
       ui.clearExpenseInputs();
       ui.ensureMonthInitialized(month);
       ui.hydrateFromState(month);
+      ui.renderAccountsPanel();
+    });
+  }
+
+  const accountSelect = document.getElementById("account-select");
+  if (accountSelect) {
+    accountSelect.addEventListener("change", () => {
+      const v = accountSelect.value;
+      ui.exitEditMode();
+      ui.clearExpenseInputs();
+      ui.state.activeAccountId = v === ALL_ACCOUNTS ? ALL_ACCOUNTS : Number.parseInt(v, 10);
+      ui.storage.save(ui.state);
+      ui.rebuildExpenseAccountSelect();
+      ui.hydrateFromState(ui.currentMonth);
+    });
+  }
+
+  const manageBtn = document.getElementById("manage-accounts");
+  if (manageBtn) {
+    manageBtn.addEventListener("click", () => {
+      if (!ui.accountsPanel) return;
+      ui.accountsPanel.hidden = !ui.accountsPanel.hidden;
+      if (!ui.accountsPanel.hidden) ui.renderAccountsPanel();
+    });
+  }
+
+  const closeAccounts = document.getElementById("close-accounts");
+  if (closeAccounts) {
+    closeAccounts.addEventListener("click", () => {
+      if (ui.accountsPanel) ui.accountsPanel.hidden = true;
+    });
+  }
+
+  const accountForm = document.getElementById("account-form");
+  if (accountForm) {
+    accountForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = (ui.accountNameInput?.value || "").trim();
+      const type = ui.accountTypeInput?.value || "Checking";
+      if (!name) {
+        ui.showFeedback(ui.expenseFeedback, "Account name cannot be empty.");
+        return;
+      }
+      const nextId =
+        ui.state.accounts.length > 0 ? Math.max(...ui.state.accounts.map((a) => a.id)) + 1 : 1;
+      ui.state.accounts.push({ id: nextId, name, type, archived: false, createdAt: Date.now() });
+      ui.accountNameInput.value = "";
+      ui.storage.save(ui.state);
+      ui.rebuildAccountSelects();
+      ui.ensureMonthInitialized(ui.currentMonth);
+      ui.renderAccountsPanel();
+    });
+  }
+
+  const accountsList = document.getElementById("accounts-list");
+  if (accountsList) {
+    accountsList.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-action]");
+      if (!btn) return;
+      const row = btn.closest(".account-row");
+      const accountId = Number.parseInt(row?.dataset.accountId || "", 10);
+      const acct = ui.state.accounts.find((a) => a.id === accountId);
+      if (!acct) return;
+
+      const action = btn.dataset.action;
+      if (action === "rename") {
+        const next = prompt("Rename account", acct.name);
+        if (!next) return;
+        acct.name = next.trim() || acct.name;
+        ui.storage.save(ui.state);
+        ui.rebuildAccountSelects();
+        ui.renderAccountsPanel();
+        ui.refreshExpenseList();
+      } else if (action === "archive") {
+        // Prevent archiving the last active (non-archived) account.
+        if (!acct.archived) {
+          const activeCount = ui.state.accounts.filter((a) => !a.archived).length;
+          if (activeCount <= 1) {
+            ui.showFeedback(ui.expenseFeedback, "You must keep at least one active account.");
+            return;
+          }
+        }
+        acct.archived = !acct.archived;
+        // If we archived the currently selected account, fall back to "All accounts"
+        if (acct.archived && String(ui.state.activeAccountId) === String(acct.id)) {
+          ui.state.activeAccountId = ALL_ACCOUNTS;
+        }
+        ui.storage.save(ui.state);
+        ui.rebuildAccountSelects();
+        ui.rebuildExpenseAccountSelect();
+        ui.renderAccountsPanel();
+        ui.hydrateFromState(ui.currentMonth);
+      }
     });
   }
 
@@ -520,10 +984,17 @@ function eventListeners() {
         `Reset data for ${ui.currentMonth}? This cannot be undone.`
       );
       if (!ok) return;
-      ui.state.months[ui.currentMonth] = { income: 0, expenses: [] };
+      ui.ensureMonthShapeV2(ui.currentMonth);
+      const month = ui.state.months[ui.currentMonth];
+      month.nextExpenseId = 0;
+      month.accounts = month.accounts || {};
+      for (const acct of ui.state.accounts) {
+        month.accounts[String(acct.id)] = { income: 0, expenses: [] };
+      }
       ui.storage.save(ui.state);
       ui.hydrateFromState(ui.currentMonth);
       ui.showFeedback(ui.expenseFeedback, "Month reset.");
+      ui.renderAccountsPanel();
     });
   }
 
@@ -552,6 +1023,7 @@ function eventListeners() {
   ui.updateEmptyState();
   ui.showBalance();
   ui.renderCategoryTotals();
+  ui.renderAccountsPanel();
 }
 
 document.addEventListener("DOMContentLoaded", eventListeners);

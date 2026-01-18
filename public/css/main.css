@@ -74,6 +74,47 @@ body {
   min-width: 220px;
 }
 
+.accounts-panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.accounts-list {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.account-row {
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.02);
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+}
+
+.account-row__name {
+  font-weight: 700;
+}
+
+.account-row__meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.account-row__actions {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: end;
+  flex-wrap: wrap;
+}
+
+.account-row.is-archived {
+  opacity: 0.7;
+}
+
 .toolbar__actions {
   display: flex;
   gap: 0.5rem;
@@ -111,6 +152,11 @@ body {
 @media (prefers-color-scheme: dark) {
   .category-row {
     background: rgba(226, 232, 240, 0.05);
+    border: 1px solid rgba(226, 232, 240, 0.08);
+  }
+
+  .account-row {
+    background: rgba(226, 232, 240, 0.04);
     border: 1px solid rgba(226, 232, 240, 0.08);
   }
 }

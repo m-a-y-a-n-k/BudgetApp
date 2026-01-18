@@ -41,6 +41,19 @@
                   name="month"
                 />
               </div>
+              <div class="toolbar__group">
+                <label class="form-label mb-1" for="account-select">Account</label>
+                <select id="account-select" class="form-control" name="account">
+                  <option value="all">All accounts</option>
+                </select>
+                <button
+                  id="manage-accounts"
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm mt-2"
+                >
+                  Manage accounts
+                </button>
+              </div>
               <div class="toolbar__group toolbar__actions">
                 <button id="export-json" type="button" class="btn btn-light">
                   Export JSON
@@ -50,6 +63,48 @@
                 </button>
               </div>
             </div>
+
+            <section id="accounts-panel" class="accounts-panel mt-3" hidden>
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h2 class="section-title mb-0">Accounts</h2>
+                <button id="close-accounts" type="button" class="btn btn-light btn-sm">
+                  Close
+                </button>
+              </div>
+
+              <form id="account-form" class="form-row" novalidate>
+                <div class="form-group col-12 col-md-6 pr-md-2">
+                  <label class="form-label" for="account-name-input">Name</label>
+                  <input
+                    id="account-name-input"
+                    class="form-control"
+                    type="text"
+                    placeholder="e.g. Checking"
+                    autocomplete="off"
+                  />
+                </div>
+                <div class="form-group col-8 col-md-4 px-md-2">
+                  <label class="form-label" for="account-type-input">Type</label>
+                  <select id="account-type-input" class="form-control">
+                    <option value="Checking" selected>Checking</option>
+                    <option value="Savings">Savings</option>
+                    <option value="Credit Card">Credit Card</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div class="form-group col-4 col-md-2 pl-md-2 d-flex align-items-end">
+                  <button id="account-add" type="submit" class="btn btn-primary btn-block">
+                    Add
+                  </button>
+                </div>
+              </form>
+
+              <div id="accounts-list" class="accounts-list" aria-label="Accounts list"></div>
+              <small class="text-muted d-block mt-2">
+                Tip: you can archive accounts to hide them from day-to-day use without losing history.
+              </small>
+            </section>
           </header>
           <div class="row">
             <div class="col-md-5 my-3">
@@ -213,6 +268,16 @@
                     <option value="Subscriptions">Subscriptions</option>
                     <option value="Travel">Travel</option>
                     <option value="Other" selected>Other</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="expense-account-input">Account</label>
+                  <select
+                    id="expense-account-input"
+                    class="form-control expense-input"
+                    name="expenseAccount"
+                  >
+                    <!-- populated by JS -->
                   </select>
                 </div>
                 <div class="form-row">
