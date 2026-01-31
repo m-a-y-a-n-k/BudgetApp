@@ -84,7 +84,7 @@ export default function DashboardScreen() {
             {state?.userProfile?.name ? `Hello, ${state.userProfile.name.split(' ')[0]}!` : 'Guest,'}
           </Text>
           <View style={styles.brandTitle}>
-            <Image source={require(`../../assets/images/vridhi_icon.png`)} style={styles.brandIcon} />
+            <Image source={require(`../../assets/images/vridhi_icon.jpg`)} style={styles.brandIcon} />
             <Text style={styles.brandTitleText}> Welcome to Vridhi</Text>
           </View>
         </View>
