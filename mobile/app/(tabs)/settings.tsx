@@ -1,22 +1,22 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Switch, Dimensions } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Switch, Dimensions, Modal, ActivityIndicator, Animated, PanResponder } from 'react-native';
 import { useAuth } from '@/src/hooks/useAuth';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useBudgetData } from '../../src/hooks/useBudgetData';
 import { COLORS, SIZES, SHADOWS } from '../../src/theme';
 import { Account, AccountData, Expense } from '../../src/types';
-import * as XLSX from 'xlsx';
-import { Paths, File } from 'expo-file-system';
+import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 const { width } = Dimensions.get('window');
 
 export default function SettingsScreen() {
     const { state, actions, currentMonth, currencySymbol } = useBudgetData();
-    const { toggleBiometrics, useBiometrics, setUnlocked } = useAuth();
+    const { setUnlocked } = useAuth();
+    const router = useRouter(); // Use useRouter from expo-router
     const [newCategory, setNewCategory] = useState('');
     const [incomeInput, setIncomeInput] = useState('');
     const [lastSyncAcctId, setLastSyncAcctId] = useState<number | null>(null);
@@ -29,6 +29,30 @@ export default function SettingsScreen() {
     const [catAccountId, setCatAccountId] = useState<number | null>(null);
     const [localBudgets, setLocalBudgets] = useState<{[key: string]: string}>({});
     const [budgetsModified, setBudgetsModified] = useState(false);
+    const [tipAmount, setTipAmount] = useState(50);
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+    const [paymentSuccess, setPaymentSuccess] = useState(false);
+
+    // Slider Logic
+    const sliderWidth = width - 80;
+    const minTip = 50;
+    const maxTip = 1000;
+    const pan = useRef(new Animated.Value((tipAmount - minTip) / (maxTip - minTip) * sliderWidth)).current;
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onPanResponderMove: (e, gestureState) => {
+                let newValue = gestureState.moveX - 60; // Offset for padding
+                if (newValue < 0) newValue = 0;
+                if (newValue > sliderWidth) newValue = sliderWidth;
+                pan.setValue(newValue);
+                const calculatedTip = Math.round((newValue / sliderWidth) * (maxTip - minTip) + minTip);
+                setTipAmount(calculatedTip);
+            },
+            onPanResponderRelease: () => {}
+        })
+    ).current;
 
     useFocusEffect(
         React.useCallback(() => {
@@ -156,45 +180,23 @@ export default function SettingsScreen() {
         Alert.alert("Success", "Budget goals saved");
     };
 
-    const handleExportExcel = async () => {
-        try {
-            const allExpensesList: any[] = [];
-            Object.keys(state.months).forEach(monthKey => {
-                const monthInfo = state.months[monthKey];
-                Object.keys(monthInfo.accounts).forEach(acctId => {
-                    const acctData = monthInfo.accounts[acctId];
-                    const accountName = state.accounts.find(a => String(a.id) === acctId)?.name || 'Unknown';
-                    acctData.expenses.forEach(exp => {
-                        allExpensesList.push({
-                            'Date': exp.date,
-                            'Account': accountName,
-                            'Description': exp.title,
-                            'Amount': exp.amount,
-                            'Category': exp.category?.[0] || 'Uncategorized'
-                        });
-                    });
-                });
-            });
 
-            if (allExpensesList.length === 0) {
-                Alert.alert("No Data", "There are no expenses to export.");
-                return;
-            }
 
-            const ws = XLSX.utils.json_to_sheet(allExpensesList);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Expenses");
-            const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-            const file = new File(Paths.cache, 'budget_export.xlsx');
-            file.write(wbout, { encoding: 'base64' });
-            await Sharing.shareAsync(file.uri, {
-                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                dialogTitle: 'Export Budget Data',
-                UTI: 'com.microsoft.excel.xlsx'
-            });
-        } catch (e) {
-            Alert.alert("Error", "Failed to export data");
-        }
+    const handleTip = async () => {
+        setIsProcessingPayment(true);
+        // Simulate Payment Processing
+        setTimeout(() => {
+            setIsProcessingPayment(false);
+            setPaymentSuccess(true);
+            setTimeout(() => {
+                setPaymentSuccess(false);
+                Alert.alert(
+                    "Success! ❤️",
+                    `Your generous tip of ${currencySymbol}${tipAmount} has been processed. Thank you for supporting Vridhi!`,
+                    [{ text: "You're welcome!", onPress: () => {} }]
+                );
+            }, 1500);
+        }, 3000);
     };
 
     const handleResetMonth = () => {
@@ -221,24 +223,28 @@ export default function SettingsScreen() {
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Settings</Text>
                     
-                    {/* User Profile Card */}
-                    <LinearGradient
-                        colors={COLORS.gradientSecondary}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.userCard}
+                    <TouchableOpacity 
+                        onPress={() => router.push('/profile')}
+                        activeOpacity={0.9}
                     >
-                        <View style={styles.userIconBg}>
-                            <Ionicons name="person" size={24} color="#fff" />
-                        </View>
-                        <View style={styles.userInfo}>
-                            <Text style={styles.userEmail}>Local Data</Text>
-                            <Text style={styles.userName}>Offline Mode</Text>
-                        </View>
-                        <TouchableOpacity style={styles.signOutBtn} onPress={() => setUnlocked(false)}>
-                            <Ionicons name="lock-closed-outline" size={24} color="#fff" />
-                        </TouchableOpacity>
-                    </LinearGradient>
+                        <LinearGradient
+                            colors={COLORS.gradientSecondary}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.userCard}
+                        >
+                            <View style={styles.userIconBg}>
+                                <Ionicons name="person" size={24} color="#fff" />
+                            </View>
+                            <View style={styles.userInfo}>
+                                <Text style={styles.userEmail}>{state?.userProfile?.name || 'Local User'}</Text>
+                                <Text style={styles.userName}>{state?.userProfile ? 'Account Settings' : 'Tap to Setup Profile'}</Text>
+                            </View>
+                            <TouchableOpacity style={styles.signOutBtn} onPress={() => setUnlocked(false)}>
+                                <Ionicons name="lock-closed-outline" size={24} color="#fff" />
+                            </TouchableOpacity>
+                        </LinearGradient>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Section: Monthly Income */}
@@ -293,19 +299,6 @@ export default function SettingsScreen() {
                                 <Text style={[styles.pillText, state?.currency === c && styles.pillTextActive]}>{c}</Text>
                             </TouchableOpacity>
                         ))}
-                    </View>
-                    <View style={styles.separator} />
-                    <View style={styles.securityRow}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.settingLabel}>Biometric Auth</Text>
-                            <Text style={styles.settingDesc}>Use FaceID or Fingerprint</Text>
-                        </View>
-                        <Switch 
-                            value={useBiometrics}
-                            onValueChange={(val) => { toggleBiometrics(val); }}
-                            trackColor={{ false: COLORS.muted, true: COLORS.primaryLight }}
-                            thumbColor={useBiometrics ? COLORS.primary : '#f4f3f4'}
-                        />
                     </View>
                 </View>
 
@@ -445,15 +438,81 @@ export default function SettingsScreen() {
                         <Ionicons name="cloud-download-outline" size={20} color={COLORS.primary} style={styles.sectionIcon} />
                         <Text style={styles.sectionTitle}>Data Management</Text>
                     </View>
-                    <TouchableOpacity style={styles.dataActionBtn} onPress={handleExportExcel}>
-                        <Ionicons name="document-text-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-                        <Text style={styles.dataActionText}>Export Data (Excel)</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.dataActionBtn, { backgroundColor: COLORS.danger }]} onPress={handleResetMonth}>
+                    <TouchableOpacity style={[styles.dataActionBtn, { backgroundColor: COLORS.danger, marginTop: 10 }]} onPress={handleResetMonth}>
                         <Ionicons name="trash-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
                         <Text style={styles.dataActionText}>Reset Current Month</Text>
                     </TouchableOpacity>
                 </View>
+
+                {/* Section: Tip Jar */}
+                <View style={[styles.section, styles.tipJarSection]}>
+                    <LinearGradient
+                        colors={['#4f46e5', '#818cf8']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.tipJarGradient}
+                    >
+                        <View style={styles.tipJarHeader}>
+                            <Ionicons name="heart" size={24} color="#fff" />
+                            <Text style={styles.tipJarTitle}>Support Vridhi</Text>
+                        </View>
+                        <Text style={styles.tipJarDesc}>Move the slider to choose your tip amount. Your support helps us keep the app free!</Text>
+                        
+                        <View style={styles.tipAmountContainer}>
+                            <Text style={styles.tipAmountLabel}>Amount</Text>
+                            <Text style={styles.tipAmountValue}>{currencySymbol}{tipAmount}</Text>
+                        </View>
+
+                        <View style={styles.sliderContainer}>
+                            <View style={styles.sliderTrack} />
+                            <Animated.View 
+                                style={[styles.sliderTrackActive, { width: pan }]} 
+                            />
+                            <Animated.View 
+                                {...panResponder.panHandlers}
+                                style={[styles.sliderThumb, { transform: [{ translateX: pan }] }]} 
+                            />
+                        </View>
+                        <View style={styles.sliderLabels}>
+                            <Text style={styles.sliderLabelText}>{currencySymbol}50</Text>
+                            <Text style={styles.sliderLabelText}>{currencySymbol}1000</Text>
+                        </View>
+
+                        <TouchableOpacity 
+                            style={styles.payBtn}
+                            onPress={handleTip}
+                            disabled={isProcessingPayment}
+                        >
+                            <Ionicons name="shield-checkmark" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+                            <Text style={styles.payBtnText}>Complete Secure Payment</Text>
+                        </TouchableOpacity>
+                    </LinearGradient>
+                </View>
+
+                {/* Simulated Payment Modal */}
+                <Modal visible={isProcessingPayment || paymentSuccess} transparent animationType="fade">
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.paymentModal}>
+                            {paymentSuccess ? (
+                                <View style={styles.successContainer}>
+                                    <Ionicons name="checkmark-circle" size={80} color={COLORS.success} />
+                                    <Text style={styles.successTitle}>Payment Successful!</Text>
+                                    <Text style={styles.successSub}>Thank you for your support</Text>
+                                </View>
+                            ) : (
+                                <View style={styles.processingContainer}>
+                                    <ActivityIndicator size="large" color={COLORS.primary} />
+                                    <Text style={styles.processingTitle}>Processing Payment...</Text>
+                                    <Text style={styles.processingSub}>Securing your transaction</Text>
+                                    <View style={styles.stripeInfo}>
+                                        <Ionicons name="lock-closed" size={14} color={COLORS.muted} />
+                                        <Text style={styles.stripeText}>Simulated Secure Checkout</Text>
+                                    </View>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                </Modal>
 
             </ScrollView>
         </SafeAreaView>
@@ -791,5 +850,153 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 15,
         fontWeight: '700',
+    },
+    tipJarSection: {
+        padding: 0,
+        overflow: 'hidden',
+        borderWidth: 0,
+    },
+    tipJarGradient: {
+        padding: 20,
+    },
+    tipJarHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 8,
+    },
+    tipJarTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#fff',
+    },
+    tipJarDesc: {
+        fontSize: 13,
+        color: 'rgba(255,255,255,0.9)',
+        marginBottom: 20,
+        lineHeight: 18,
+    },
+    tipAmountContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    tipAmountLabel: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    tipAmountValue: {
+        color: '#fff',
+        fontSize: 32,
+        fontWeight: '800',
+    },
+    sliderContainer: {
+        height: 30,
+        justifyContent: 'center',
+        marginBottom: 10,
+    },
+    sliderTrack: {
+        height: 6,
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        borderRadius: 3,
+    },
+    sliderTrackActive: {
+        height: 6,
+        backgroundColor: '#fff',
+        borderRadius: 3,
+        position: 'absolute',
+    },
+    sliderThumb: {
+        width: 24,
+        height: 24,
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        position: 'absolute',
+        left: -12,
+        ...SHADOWS.medium,
+    },
+    sliderLabels: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 24,
+    },
+    sliderLabelText: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    payBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#fff',
+        paddingVertical: 14,
+        borderRadius: 12,
+        ...SHADOWS.small,
+    },
+    payBtnText: {
+        color: COLORS.primary,
+        fontWeight: '800',
+        fontSize: 15,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    paymentModal: {
+        backgroundColor: '#fff',
+        width: '100%',
+        borderRadius: 24,
+        padding: 32,
+        alignItems: 'center',
+        ...SHADOWS.large,
+    },
+    processingContainer: {
+        alignItems: 'center',
+    },
+    processingTitle: {
+        fontSize: 20,
+        fontWeight: '800',
+        color: COLORS.text,
+        marginTop: 20,
+        marginBottom: 8,
+    },
+    processingSub: {
+        fontSize: 14,
+        color: COLORS.textLight,
+        marginBottom: 24,
+    },
+    stripeInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        backgroundColor: COLORS.bg,
+        borderRadius: 8,
+    },
+    stripeText: {
+        fontSize: 12,
+        color: COLORS.muted,
+        fontWeight: '600',
+    },
+    successContainer: {
+        alignItems: 'center',
+    },
+    successTitle: {
+        fontSize: 22,
+        fontWeight: '800',
+        color: COLORS.success,
+        marginTop: 20,
+        marginBottom: 4,
+    },
+    successSub: {
+        fontSize: 15,
+        color: COLORS.textLight,
     },
 });

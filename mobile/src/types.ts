@@ -31,6 +31,14 @@ export interface Account {
   categories: string[];
 }
 
+export interface UserProfile {
+  name: string;
+  age: string;
+  gender: string;
+  kycInfo: string;
+  photoUri: string | null;
+}
+
 export interface BudgetState {
   version: number;
   currentMonth: string;
@@ -40,6 +48,7 @@ export interface BudgetState {
     [monthKey: string]: MonthData;
   };
   currency: string;
+  userProfile?: UserProfile;
 }
 
 export interface BudgetActions {
@@ -61,6 +70,7 @@ export interface BudgetActions {
   resetMonth: () => Promise<void>;
   loadData: () => Promise<void>;
   setCurrentMonth: (monthKey: string) => void;
+  updateProfile: (profile: UserProfile) => Promise<void>;
 }
 
 export interface UseBudgetDataReturn {

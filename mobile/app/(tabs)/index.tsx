@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, FlatList, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, FlatList, Dimensions, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,7 +31,7 @@ export default function DashboardScreen() {
   }
 
   const monthData = state.months[currentMonth] || { accounts: {} };
-  
+
   let totalIncome = 0;
   let totalExpense = 0;
   let allExpenses: (Expense & { accountId?: number })[] = [];
@@ -39,7 +39,7 @@ export default function DashboardScreen() {
   Object.entries(monthData.accounts).forEach(([acctId, acct]) => {
     const id = parseInt(acctId);
     if (state.activeAccountId !== 'all' && state.activeAccountId !== id) return;
-    
+
     totalIncome += ((acct as AccountData).income || 0);
     (acct as AccountData).expenses.forEach((exp: Expense) => {
       const val = (exp.amount || 0);
@@ -68,7 +68,7 @@ export default function DashboardScreen() {
     const accountId = expense.accountId || (state.activeAccountId === 'all' ? state.accounts[0].id : state.activeAccountId);
     router.push({
       pathname: '/modal',
-      params: { 
+      params: {
         editMode: 'true',
         expenseId: expense.id,
         accountId: accountId
@@ -80,10 +80,18 @@ export default function DashboardScreen() {
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <View>
-          <Text style={styles.greetingText}>Welcome back,</Text>
-          <Text style={styles.brandTitle}>Vridhi</Text>
+          <Text style={styles.greetingText}>
+            {state?.userProfile?.name ? `Hello, ${state.userProfile.name.split(' ')[0]}!` : 'Guest,'}
+          </Text>
+          <View style={styles.brandTitle}>
+            <Image source={require(`../../assets/images/vridhi_icon.png`)} style={styles.brandIcon} />
+            <Text style={styles.brandTitleText}> Welcome to Vridhi</Text>
+          </View>
         </View>
-        <TouchableOpacity style={styles.profileBtn}>
+        <TouchableOpacity
+          style={styles.profileBtn}
+          onPress={() => router.push('/profile')}
+        >
           <LinearGradient
             colors={COLORS.gradientPrimary}
             style={styles.profileGradient}
@@ -108,14 +116,14 @@ export default function DashboardScreen() {
 
       <View style={styles.accountSelector}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.accountBadge, state.activeAccountId === 'all' && styles.accountBadgeActive]}
             onPress={() => actions.switchAccount('all')}
           >
             <Text style={[styles.accountBadgeText, state.activeAccountId === 'all' && styles.accountBadgeTextActive]}>All Accounts</Text>
           </TouchableOpacity>
           {state.accounts.filter(a => !a.archived).map(acct => (
-            <TouchableOpacity 
+            <TouchableOpacity
               key={acct.id}
               style={[styles.accountBadge, state.activeAccountId === acct.id && styles.accountBadgeActive]}
               onPress={() => actions.switchAccount(acct.id)}
@@ -177,9 +185,9 @@ export default function DashboardScreen() {
   const renderExpense = (item: Expense & { accountId?: number }, index: number) => {
     const category = item.category?.[0] || 'Other';
     const iconName = CATEGORY_ICONS[category] || 'help-circle';
-    
+
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         key={item.id}
         style={styles.expenseItem}
         onPress={() => handleEditExpense(item)}
@@ -194,7 +202,7 @@ export default function DashboardScreen() {
         </View>
         <View style={styles.expRight}>
           <Text style={styles.expAmount}>-{currencySymbol}{item.amount.toFixed(2)}</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => handleDeleteExpense(item)}
             style={styles.deleteAction}
           >
@@ -207,13 +215,13 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
       >
         {renderHeader()}
         {renderSummaryCards()}
-        
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Activities</Text>
           <TouchableOpacity>
@@ -232,9 +240,9 @@ export default function DashboardScreen() {
           </View>
         )}
       </ScrollView>
-      
-      <TouchableOpacity 
-        style={styles.fab} 
+
+      <TouchableOpacity
+        style={styles.fab}
         onPress={() => router.push('/modal')}
         activeOpacity={0.8}
       >
@@ -277,6 +285,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   brandTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  brandTitleText: {
     fontSize: 28,
     fontWeight: '800',
     color: COLORS.text,
@@ -511,5 +524,13 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  brandIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
   },
 });

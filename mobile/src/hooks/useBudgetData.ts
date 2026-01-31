@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { AppStorage, formatMonthKey, DEFAULT_CATEGORIES } from '../storage';
-import { BudgetState, Expense, UseBudgetDataReturn, AccountData, MonthData } from '../types';
+import { BudgetState, Expense, UseBudgetDataReturn, AccountData, MonthData, UserProfile } from '../types';
 
 export function useBudgetData(): UseBudgetDataReturn {
   const [state, setState] = useState<BudgetState | null>(null);
@@ -427,6 +427,12 @@ export function useBudgetData(): UseBudgetDataReturn {
       }
   }, [state, currentMonth, saveState]);
 
+    const updateProfile = useCallback(async (profile: UserProfile) => {
+        if (!state) return;
+        const newState = { ...state, userProfile: profile };
+        await saveState(newState);
+    }, [state, saveState]);
+
   const actions = useMemo(() => ({
       addExpense,
       editExpense,
@@ -445,7 +451,8 @@ export function useBudgetData(): UseBudgetDataReturn {
       exportData,
       resetMonth,
       loadData,
-      setCurrentMonth
+      setCurrentMonth,
+      updateProfile
   }), [
       addExpense,
       editExpense,
@@ -463,7 +470,8 @@ export function useBudgetData(): UseBudgetDataReturn {
       switchAccount,
       exportData,
       resetMonth,
-      loadData
+      loadData,
+      updateProfile
   ]);
 
   const currencySymbol = useMemo(() => {

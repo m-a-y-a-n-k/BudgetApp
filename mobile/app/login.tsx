@@ -58,7 +58,7 @@ export default function LoginScreen() {
       <SafeAreaView style={styles.content}>
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>B</Text>
+            <Text style={styles.logoText}>V</Text>
           </View>
           <Text style={styles.title}>Vridhi</Text>
           <Text style={styles.subtitle}>Grow Your Wealth</Text>
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingVertical: 14,
     paddingHorizontal: 24,
-    borderRadius: SIZES.radius,
+    borderRadius: SIZES.radiusMedium,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',

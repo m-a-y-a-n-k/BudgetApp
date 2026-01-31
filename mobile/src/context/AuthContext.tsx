@@ -62,18 +62,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
       if (!hasHardware) {
-        Alert.alert('Not Supported', 'Biometric authentication is not supported on this device.');
+        Alert.alert('Not Supported', 'Your device does not support biometric authentication.');
         return { success: false, error: 'Hardware not available' };
       }
 
-      // If not enrolled but has hardware, we can still try to authenticate (it might use passcode)
-      // or we can inform the user.
-      if (!isEnrolled && supportedTypes.length > 0) {
-          // If no biometrics enrolled, authenticateAsync can still use device security (Passcode/Pattern)
-          // on many devices if disableDeviceFallback is false (default).
-      } else if (!isEnrolled) {
-          Alert.alert('Not Enrolled', 'No biometrics are enrolled on this device. Please set up FaceID/Fingerprint in your device settings.');
-          return { success: false, error: 'Not enrolled' };
+      if (!isEnrolled) {
+          // On many devices, calling authenticateAsync will still show the system prompt 
+          // and allow the user to use their device passcode even if face/finger is not enrolled.
       }
 
       const result = await LocalAuthentication.authenticateAsync({
@@ -85,8 +80,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (result.success) {
         setIsUnlocked(true);
-      } else if (result.error !== 'user_cancel' && result.error !== 'app_cancel') {
-          Alert.alert('Authentication Failed', 'Could not verify your identity. Please try again.');
+      } else if (result.error && result.error !== 'user_cancel' && result.error !== 'app_cancel' && result.error !== 'user_fallback') {
+          Alert.alert('Authentication Failed', `Error: ${result.error}. please ensure biometrics are set up in your device settings.`);
       }
 
       return { success: result.success, error: result.success ? null : (result.error || 'Authentication failed') };
