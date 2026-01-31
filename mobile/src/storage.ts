@@ -15,6 +15,26 @@ export const formatMonthKey = (date: Date): string => {
   return `${y}-${m}`;
 };
 
+export const EXCHANGE_RATES: { [key: string]: number } = {
+  USD: 1,
+  EUR: 0.92,
+  GBP: 0.79,
+  JPY: 150.0,
+  INR: 83.0,
+  CAD: 1.35,
+  AUD: 1.52,
+};
+
+export const CURRENCY_SYMBOLS: { [key: string]: string } = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  JPY: '¥',
+  INR: '₹',
+  CAD: 'C$',
+  AUD: 'A$',
+};
+
 export const todayISO = () => {
   const d = new Date();
   const y = d.getFullYear();

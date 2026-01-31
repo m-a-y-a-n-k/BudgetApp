@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,7 +15,11 @@ export default function LoginScreen() {
       if (isUnlocked) {
         router.replace('/(tabs)');
       } else if (useBiometrics) {
-        handleBiometricAuth();
+        // Add a tiny delay to ensure the UI is ready before prompting biometrics
+        const timer = setTimeout(() => {
+            handleBiometricAuth();
+        }, 500);
+        return () => clearTimeout(timer);
       } else {
           // If biometrics is off, we just auto-unlock (local app, no remote auth)
           setUnlocked(true);
@@ -25,9 +29,14 @@ export default function LoginScreen() {
   }, [loading, isUnlocked, useBiometrics]);
 
   const handleBiometricAuth = async () => {
-    const result = await authenticateBiometrics();
-    if (result.success) {
-      router.replace('/(tabs)');
+    try {
+      const result = await authenticateBiometrics();
+      if (result.success) {
+        setUnlocked(true);
+        router.replace('/(tabs)');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to start biometric authentication.');
     }
   };
 

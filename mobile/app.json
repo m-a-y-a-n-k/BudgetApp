@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Allow BudgetApp to use FaceID for secure access to your financial data."
+        "NSFaceIDUsageDescription": "Allow Vridhi to use FaceID for secure access to your financial data."
       }
     },
     "android": {

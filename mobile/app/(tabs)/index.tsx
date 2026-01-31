@@ -9,7 +9,7 @@ import { formatMonthKey } from '../../src/storage';
 import { BudgetState, Expense, AccountData } from '../../src/types';
 
 export default function DashboardScreen() {
-  const { state, loading, currentMonth, actions } = useBudgetData();
+  const { state, loading, currentMonth, currencySymbol, actions } = useBudgetData();
 
   // Reload data when screen comes into focus
   useFocusEffect(
@@ -123,17 +123,17 @@ export default function DashboardScreen() {
     <View style={styles.cardContainer}>
       <View style={[styles.card, { backgroundColor: COLORS.primary }]}>
         <Text style={styles.cardLabel}>Balance</Text>
-        <Text style={styles.cardValue}>${balance.toFixed(2)}</Text>
+        <Text style={styles.cardValue}>{currencySymbol}{balance.toFixed(2)}</Text>
         <Text style={styles.cardSubtext}>Savings Rate: {savingsRate}%</Text>
       </View>
       <View style={styles.row}>
          <View style={[styles.card, styles.halfCard, { backgroundColor: COLORS.success }]}>
             <Text style={styles.cardLabel}>Income</Text>
-            <Text style={styles.cardValue}>${totalIncome.toFixed(2)}</Text>
+            <Text style={styles.cardValue}>{currencySymbol}{totalIncome.toFixed(2)}</Text>
          </View>
          <View style={[styles.card, styles.halfCard, { backgroundColor: COLORS.danger }]}>
             <Text style={styles.cardLabel}>Expenses</Text>
-            <Text style={styles.cardValue}>${totalExpense.toFixed(2)}</Text>
+            <Text style={styles.cardValue}>{currencySymbol}{totalExpense.toFixed(2)}</Text>
          </View>
       </View>
     </View>
@@ -144,6 +144,7 @@ export default function DashboardScreen() {
     <TouchableOpacity 
       key={index}
       style={styles.expenseItem}
+      onPress={() => handleEditExpense(item)}
       onLongPress={() => handleEditExpense(item)}
       delayLongPress={500}
     >
@@ -156,7 +157,7 @@ export default function DashboardScreen() {
         <Text style={styles.expDate}>{item.date || 'No date'}</Text>
       </View>
       <View style={styles.expenseRight}>
-        <Text style={styles.expAmount}>- ${item.amount.toFixed(2)}</Text>
+        <Text style={styles.expAmount}>- {currencySymbol}{item.amount.toFixed(2)}</Text>
         <TouchableOpacity 
           onPress={() => handleDeleteExpense(item)}
           style={styles.deleteBtn}

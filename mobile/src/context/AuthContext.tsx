@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 
 const AUTH_CONFIG_KEY = '@budget_app_auth_config';
 
@@ -57,23 +58,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const authenticateBiometrics = async () => {
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const supportedTypes = await LocalAuthentication.supportedAuthenticationTypesAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
-      if (!hasHardware || !isEnrolled) {
-        return { success: false, error: 'Biometrics not available' };
+      if (!hasHardware) {
+        Alert.alert('Not Supported', 'Biometric authentication is not supported on this device.');
+        return { success: false, error: 'Hardware not available' };
+      }
+
+      // If not enrolled but has hardware, we can still try to authenticate (it might use passcode)
+      // or we can inform the user.
+      if (!isEnrolled && supportedTypes.length > 0) {
+          // If no biometrics enrolled, authenticateAsync can still use device security (Passcode/Pattern)
+          // on many devices if disableDeviceFallback is false (default).
+      } else if (!isEnrolled) {
+          Alert.alert('Not Enrolled', 'No biometrics are enrolled on this device. Please set up FaceID/Fingerprint in your device settings.');
+          return { success: false, error: 'Not enrolled' };
       }
 
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Unlock Vridhi',
         fallbackLabel: 'Use Passcode',
+        disableDeviceFallback: false,
+        cancelLabel: 'Cancel',
       });
 
       if (result.success) {
         setIsUnlocked(true);
+      } else if (result.error !== 'user_cancel' && result.error !== 'app_cancel') {
+          Alert.alert('Authentication Failed', 'Could not verify your identity. Please try again.');
       }
 
-      return { success: result.success, error: result.success ? null : 'Authentication failed' };
+      return { success: result.success, error: result.success ? null : (result.error || 'Authentication failed') };
     } catch (e) {
+      console.error('Biometric error:', e);
+      Alert.alert('Error', 'An unexpected error occurred during authentication.');
       return { success: false, error: 'An error occurred' };
     }
   };

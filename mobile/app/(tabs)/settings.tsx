@@ -11,10 +11,11 @@ import { Paths, File } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
 export default function SettingsScreen() {
-    const { state, actions, currentMonth } = useBudgetData();
+    const { state, actions, currentMonth, currencySymbol } = useBudgetData();
     const { toggleBiometrics, useBiometrics } = useAuth();
     const [newCategory, setNewCategory] = useState('');
     const [incomeInput, setIncomeInput] = useState('');
+    const [lastSyncAcctId, setLastSyncAcctId] = useState<number | null>(null);
     const [newAccountName, setNewAccountName] = useState('');
     const [initialBalance, setInitialBalance] = useState('');
     const [newAccountType, setNewAccountType] = useState('Checking');
@@ -22,6 +23,8 @@ export default function SettingsScreen() {
     const [renamingAccountId, setRenamingAccountId] = useState<number | null>(null);
     const [renamingName, setRenamingName] = useState('');
     const [catAccountId, setCatAccountId] = useState<number | null>(null);
+    const [localBudgets, setLocalBudgets] = useState<{[key: string]: string}>({});
+    const [budgetsModified, setBudgetsModified] = useState(false);
 
     // Reload data when screen comes into focus
     useFocusEffect(
@@ -30,12 +33,40 @@ export default function SettingsScreen() {
         }, [actions.loadData])
     );
 
+    const effectiveIncomeAccountId = incomeAccountId || (state?.activeAccountId === 'all' ? state?.accounts[0]?.id : state?.activeAccountId as number);
+    const effectiveCatAccountId = catAccountId || (state?.activeAccountId === 'all' ? state?.accounts[0]?.id : state?.activeAccountId as number);
+
+    // Sync income input when account or state changes
+    React.useEffect(() => {
+        if (!state) return;
+        if (effectiveIncomeAccountId !== lastSyncAcctId) {
+            const acct = state.months[currentMonth]?.accounts[String(effectiveIncomeAccountId)];
+            if (acct) {
+                setIncomeInput(acct.income > 0 ? String(acct.income) : '');
+                setLastSyncAcctId(effectiveIncomeAccountId);
+            }
+        }
+    }, [state, currentMonth, effectiveIncomeAccountId, lastSyncAcctId]);
+
+    // Sync category budgets when account changes
+    React.useEffect(() => {
+        if (!state || budgetsModified) return;
+        const acctId = effectiveCatAccountId;
+        const acctBudgets = state.months[currentMonth]?.accounts[String(acctId)]?.categoryBudgets || {};
+        const budgets: {[key: string]: string} = {};
+        state.accounts.find(a => a.id === acctId)?.categories.forEach(cat => {
+            const val = acctBudgets[cat];
+            budgets[cat] = (val !== undefined && val !== null) ? String(val) : '';
+        });
+        setLocalBudgets(budgets);
+        setBudgetsModified(false);
+    }, [state, currentMonth, effectiveCatAccountId, budgetsModified]);
+
     if (!state) return null;
 
     const currencies = ["USD", "EUR", "GBP", "JPY", "INR", "CAD", "AUD"];
     const accountTypes = ["Checking", "Savings", "Credit Card", "Cash"];
 
-    const effectiveCatAccountId = catAccountId || (state.activeAccountId === 'all' ? state.accounts[0].id : state.activeAccountId as number);
     const selectedAccount = state.accounts.find(a => a.id === effectiveCatAccountId);
     const monthData = state.months[currentMonth] || { accounts: {} };
 
@@ -66,7 +97,7 @@ export default function SettingsScreen() {
             : state.activeAccountId as number);
         
         actions.setIncome(amount, targetAcctId);
-        setIncomeInput('');
+        // Do not clear incomeInput, keep it reflecting current value
         Alert.alert("Success", "Income updated");
     };
 
@@ -101,6 +132,31 @@ export default function SettingsScreen() {
             setRenamingAccountId(null);
             setRenamingName('');
         }
+    };
+
+    const handleSaveBudgets = async () => {
+        if (!selectedAccount) return;
+        
+        const finalBudgets: { [category: string]: number } = {};
+        let hasError = false;
+
+        Object.entries(localBudgets).forEach(([cat, val]) => {
+            const amount = val.trim() === '' ? 0 : parseFloat(val);
+            if (isNaN(amount) || amount < 0) {
+                hasError = true;
+            } else {
+                finalBudgets[cat] = amount;
+            }
+        });
+
+        if (hasError) {
+            Alert.alert("Error", "Please enter valid budget amounts");
+            return;
+        }
+
+        await actions.setCategoryBudgets(finalBudgets, selectedAccount.id);
+        setBudgetsModified(false);
+        Alert.alert("Success", "Budget goals saved");
     };
 
     const handleExportExcel = async () => {
@@ -187,8 +243,7 @@ export default function SettingsScreen() {
                     <View style={styles.accountSelector}>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                             {state.accounts.filter(a => !a.archived).map(acct => {
-                                const isSelected = (incomeAccountId === acct.id) || 
-                                    (!incomeAccountId && (state.activeAccountId === acct.id || (state.activeAccountId === 'all' && state.accounts[0].id === acct.id)));
+                                const isSelected = effectiveIncomeAccountId === acct.id;
                                 return (
                                     <TouchableOpacity 
                                         key={acct.id} 
@@ -203,18 +258,21 @@ export default function SettingsScreen() {
                     </View>
 
                     <View style={styles.row}>
-                        <TextInput 
-                            style={styles.input}
-                            placeholder="Enter Monthly Income"
-                            keyboardType="decimal-pad"
-                            value={incomeInput}
-                            onChangeText={(text) => {
-                                // Real-time numeric validation (allow only numbers and one decimal point)
-                                const sanitized = text.replace(/[^0-9.]/g, '');
-                                if (sanitized.split('.').length > 2) return;
-                                setIncomeInput(sanitized);
-                            }}
-                        />
+                        <View style={{flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8}}>
+                            <Text style={styles.currencyPrefix}>{currencySymbol}</Text>
+                            <TextInput 
+                                style={[styles.input, {flex: 1}]}
+                                placeholder="Enter Monthly Income"
+                                keyboardType="decimal-pad"
+                                value={incomeInput}
+                                onChangeText={(text) => {
+                                    // Real-time numeric validation (allow only numbers and one decimal point)
+                                    const sanitized = text.replace(/[^0-9.]/g, '');
+                                    if (sanitized.split('.').length > 2) return;
+                                    setIncomeInput(sanitized);
+                                }}
+                            />
+                        </View>
                         <TouchableOpacity style={styles.btnSmall} onPress={handleSetIncome}>
                             <Text style={styles.btnText}>Set</Text>
                         </TouchableOpacity>
@@ -248,17 +306,20 @@ export default function SettingsScreen() {
                             onChangeText={setNewAccountName}
                         />
                         <View style={styles.row}>
-                            <TextInput 
-                                style={[styles.input, { flex: 1 }]}
-                                placeholder="Initial Balance (Optional)"
-                                keyboardType="decimal-pad"
-                                value={initialBalance}
-                                onChangeText={(text) => {
-                                    const sanitized = text.replace(/[^0-9.]/g, '');
-                                    if (sanitized.split('.').length > 2) return;
-                                    setInitialBalance(sanitized);
-                                }}
-                            />
+                            <View style={{flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8}}>
+                                <Text style={styles.currencyPrefix}>{currencySymbol}</Text>
+                                <TextInput 
+                                    style={[styles.input, { flex: 1 }]}
+                                    placeholder="Initial Balance (Optional)"
+                                    keyboardType="decimal-pad"
+                                    value={initialBalance}
+                                    onChangeText={(text) => {
+                                        const sanitized = text.replace(/[^0-9.]/g, '');
+                                        if (sanitized.split('.').length > 2) return;
+                                        setInitialBalance(sanitized);
+                                    }}
+                                />
+                            </View>
                             <TouchableOpacity style={styles.btnSmall} onPress={handleAddAccount}>
                                 <Text style={styles.btnText}>Add</Text>
                             </TouchableOpacity>
@@ -333,7 +394,10 @@ export default function SettingsScreen() {
                                     <TouchableOpacity 
                                         key={acct.id} 
                                         style={[styles.accountPill, isSelected && styles.accountPillActive]}
-                                        onPress={() => setCatAccountId(acct.id)}
+                                        onPress={() => {
+                                            setCatAccountId(acct.id);
+                                            actions.switchAccount(acct.id); // Sync globally for Analytics
+                                        }}
                                     >
                                         <Text style={[styles.accountPillText, isSelected && styles.accountPillTextActive]}>{acct.name}</Text>
                                     </TouchableOpacity>
@@ -353,34 +417,28 @@ export default function SettingsScreen() {
                             <Text style={styles.btnText}>Add</Text>
                         </TouchableOpacity>
                      </View>
-                     <View style={styles.catList}>
+                      <View style={styles.catList}>
                         {selectedAccount?.categories.map(c => {
-                             const currentBudget = monthData.accounts[String(selectedAccount.id)]?.categoryBudgets?.[c] || 0;
+                             const val = localBudgets[c] || '';
                             return (
                                 <View key={c} style={styles.catItem}>
                                     <View style={{flex: 1}}>
                                         <Text style={styles.catItemText}>{c}</Text>
                                     </View>
-                                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
+                                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                                        <Text style={{color: COLORS.text, fontSize: 12}}>{currencySymbol}</Text>
                                         <TextInput 
-                                            key={`${selectedAccount.id}-${c}-${currentBudget}`}
                                             style={styles.budgetInput}
                                             placeholder="0.00"
                                             keyboardType="decimal-pad"
-                                            defaultValue={currentBudget > 0 ? String(currentBudget) : ''}
-                                            onEndEditing={(e) => {
-                                                const text = e.nativeEvent.text;
-                                                if (!text.trim()) {
-                                                    if (selectedAccount) actions.setCategoryBudget(c, 0, selectedAccount.id);
-                                                    return;
-                                                }
-                                                const val = parseFloat(text);
-                                                if (isNaN(val) || val < 0) {
-                                                    Alert.alert("Error", "Please enter a valid budget amount");
-                                                    return;
-                                                }
-                                                if (selectedAccount) actions.setCategoryBudget(c, val, selectedAccount.id);
+                                            value={val}
+                                            onChangeText={(text) => {
+                                                const sanitized = text.replace(/[^0-9.]/g, '');
+                                                if (sanitized.split('.').length > 2) return;
+                                                setLocalBudgets(prev => ({ ...prev, [c]: sanitized }));
+                                                setBudgetsModified(true);
                                             }}
+                                            returnKeyType="done"
                                         />
                                         <TouchableOpacity onPress={() => {
                                             if (selectedAccount) {
@@ -397,6 +455,15 @@ export default function SettingsScreen() {
                             );
                         })}
                       </View>
+
+                      {budgetsModified && (
+                          <TouchableOpacity 
+                              style={[styles.actionBtn, { marginTop: 20 }]} 
+                              onPress={handleSaveBudgets}
+                          >
+                              <Text style={styles.actionBtnText}>Save Budget Goals</Text>
+                          </TouchableOpacity>
+                      )}
                 </View>
 
                 {/* Data Management */}
@@ -649,6 +716,11 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         fontSize: 16,
         color: COLORS.text,
+    },
+    currencyPrefix: {
+        fontSize: 16,
+        color: COLORS.text,
+        fontWeight: 'bold',
     },
     userInfo: {
         flex: 1,

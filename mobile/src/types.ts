@@ -51,6 +51,7 @@ export interface BudgetActions {
   addCategory: (name: string, acctId?: number) => Promise<void>;
   deleteCategory: (name: string, acctId?: number) => Promise<void>;
   setCategoryBudget: (category: string, amount: number, acctId?: number) => Promise<void>;
+  setCategoryBudgets: (budgets: { [category: string]: number }, acctId?: number) => Promise<void>;
   addAccount: (name: string, type: string, initialBalance?: number) => Promise<void>;
   renameAccount: (id: number, newName: string) => Promise<void>;
   archiveAccount: (id: number, archived: boolean) => Promise<void>;
@@ -66,5 +67,6 @@ export interface UseBudgetDataReturn {
   state: BudgetState | null;
   loading: boolean;
   currentMonth: string;
+  currencySymbol: string;
   actions: BudgetActions;
 }

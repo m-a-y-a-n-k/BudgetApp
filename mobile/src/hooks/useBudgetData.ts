@@ -119,9 +119,52 @@ export function useBudgetData(): UseBudgetDataReturn {
        await saveState(newState);
   }, [state, currentMonth, saveState]);
 
-  const setCurrency = useCallback(async (currency: string) => {
+  const setCurrency = useCallback(async (newCurrency: string) => {
       if (!state) return;
-      const newState = { ...state, currency };
+      const oldCurrency = state.currency;
+      if (oldCurrency === newCurrency) return;
+
+      const import_Storage = require('../storage');
+      const rates = import_Storage.EXCHANGE_RATES;
+      
+      const oldRate = rates[oldCurrency] || 1;
+      const newRate = rates[newCurrency] || 1;
+      const conversionFactor = newRate / oldRate;
+
+      const newState = { ...state, currency: newCurrency };
+      
+      // Convert all amounts in all months
+      Object.keys(newState.months).forEach(monthKey => {
+          const mData = { ...newState.months[monthKey] };
+          const accs = { ...mData.accounts };
+          
+          Object.keys(accs).forEach(acctId => {
+              const acctData = { ...accs[acctId] };
+              
+              // Convert Income
+              acctData.income = Number((acctData.income * conversionFactor).toFixed(2));
+              
+              // Convert Expenses
+              acctData.expenses = acctData.expenses.map(exp => ({
+                  ...exp,
+                  amount: Number((exp.amount * conversionFactor).toFixed(2)),
+                  value: Number((exp.value * conversionFactor).toFixed(2))
+              }));
+              
+              // Convert Budgets
+              const newBudgets: { [key: string]: number } = {};
+              Object.keys(acctData.categoryBudgets).forEach(cat => {
+                  newBudgets[cat] = Number((acctData.categoryBudgets[cat] * conversionFactor).toFixed(2));
+              });
+              acctData.categoryBudgets = newBudgets;
+              
+              accs[acctId] = acctData;
+          });
+          
+          mData.accounts = accs;
+          newState.months[monthKey] = mData;
+      });
+
       await saveState(newState);
   }, [state, saveState]);
   
@@ -181,58 +224,80 @@ export function useBudgetData(): UseBudgetDataReturn {
       }
   }, [state, saveState]);
   
-  const deleteCategory = useCallback(async (name: string, acctId?: number) => {
-       if (!state) return;
-       const targetId = acctId || (state.activeAccountId === 'all' ? state.accounts[0].id : state.activeAccountId as number);
-       
-       const newState = { 
-           ...state,
-           accounts: state.accounts.map(acct => {
-               if (acct.id === targetId) {
-                   return { ...acct, categories: acct.categories.filter(c => c !== name) };
-               }
-               return acct;
-           })
-       };
-       await saveState(newState);
-  }, [state, saveState]);
-  
-  const setCategoryBudget = useCallback(async (category: string, amount: number, acctId?: number) => {
-       if (!state) return;
-       const targetId = acctId || (state.activeAccountId === 'all' ? state.accounts[0].id : state.activeAccountId as number);
-       const monthKey = currentMonth;
-       const acctIdStr = String(targetId);
-       
-       const newState = { ...state };
-       if (!newState.months[monthKey]) {
-           newState.months[monthKey] = getInitializedMonth(newState, monthKey);
-       }
-       
-       // Propagate budget change to target month and ALL Chronologically Future Months
-       const futureMonthKeys = Object.keys(newState.months).filter(k => k >= monthKey);
-       const updatedMonths = { ...newState.months };
+    const deleteCategory = useCallback(async (name: string, acctId?: number) => {
+        if (!state) return;
+        const targetId = acctId || (state.activeAccountId === 'all' ? state.accounts[0].id : state.activeAccountId as number);
+        const acctIdStr = String(targetId);
+        
+        const newState = { 
+            ...state,
+            accounts: state.accounts.map(acct => {
+                if (acct.id === targetId) {
+                    return { ...acct, categories: acct.categories.filter(c => c !== name) };
+                }
+                return acct;
+            }),
+            months: { ...state.months }
+        };
 
-       futureMonthKeys.forEach(mk => {
-            const mData = { ...updatedMonths[mk] };
-            const accs = { ...mData.accounts };
-            const acctData = accs[acctIdStr] 
-                ? { ...accs[acctIdStr], categoryBudgets: { ...accs[acctIdStr].categoryBudgets } }
-                : { income: 0, expenses: [], categoryBudgets: {} };
-            
-            if (!isNaN(amount) && amount > 0) {
-                acctData.categoryBudgets[category] = amount;
-            } else {
-                delete acctData.categoryBudgets[category];
+        // Also remove from budgets in all months
+        Object.keys(newState.months).forEach(mk => {
+            const mData = { ...newState.months[mk] };
+            if (mData.accounts[acctIdStr]) {
+                const acctData = { 
+                    ...mData.accounts[acctIdStr],
+                    categoryBudgets: { ...mData.accounts[acctIdStr].categoryBudgets }
+                };
+                delete acctData.categoryBudgets[name];
+                mData.accounts = { ...mData.accounts, [acctIdStr]: acctData };
+                newState.months[mk] = mData;
             }
-            
-            accs[acctIdStr] = acctData;
-            mData.accounts = accs;
-            updatedMonths[mk] = mData;
-       });
+        });
 
-       newState.months = updatedMonths;
-       await saveState(newState);
+        await saveState(newState);
+   }, [state, saveState]);
+  
+  const setCategoryBudgets = useCallback(async (budgets: { [category: string]: number }, acctId?: number) => {
+      if (!state) return;
+      const targetId = acctId || (state.activeAccountId === 'all' ? state.accounts[0].id : state.activeAccountId as number);
+      const monthKey = currentMonth;
+      const acctIdStr = String(targetId);
+      
+      const newState = { ...state };
+      if (!newState.months[monthKey]) {
+          newState.months[monthKey] = getInitializedMonth(newState, monthKey);
+      }
+      
+      const futureMonthKeys = Object.keys(newState.months).filter(k => k >= monthKey);
+      const updatedMonths = { ...newState.months };
+
+      futureMonthKeys.forEach(mk => {
+           const mData = { ...updatedMonths[mk] };
+           const accs = { ...mData.accounts };
+           const acctData = accs[acctIdStr] 
+               ? { ...accs[acctIdStr], categoryBudgets: { ...accs[acctIdStr].categoryBudgets } }
+               : { income: 0, expenses: [], categoryBudgets: {} };
+           
+           Object.entries(budgets).forEach(([category, amount]) => {
+               if (!isNaN(amount) && amount > 0) {
+                   acctData.categoryBudgets[category] = amount;
+               } else {
+                   delete acctData.categoryBudgets[category];
+               }
+           });
+           
+           accs[acctIdStr] = acctData;
+           mData.accounts = accs;
+           updatedMonths[mk] = mData;
+      });
+
+      newState.months = updatedMonths;
+      await saveState(newState);
   }, [state, currentMonth, saveState, getInitializedMonth]);
+
+  const setCategoryBudget = useCallback(async (category: string, amount: number, acctId?: number) => {
+      return setCategoryBudgets({ [category]: amount }, acctId);
+  }, [setCategoryBudgets]);
 
   const editExpense = useCallback(async (id: number, acctId: number, updatedExpense: Partial<Expense>) => {
       if (!state) return;
@@ -371,6 +436,7 @@ export function useBudgetData(): UseBudgetDataReturn {
       addCategory,
       deleteCategory,
       setCategoryBudget,
+      setCategoryBudgets,
       addAccount,
       renameAccount,
       archiveAccount,
@@ -389,6 +455,7 @@ export function useBudgetData(): UseBudgetDataReturn {
       addCategory,
       deleteCategory,
       setCategoryBudget,
+      setCategoryBudgets,
       addAccount,
       renameAccount,
       archiveAccount,
@@ -399,10 +466,16 @@ export function useBudgetData(): UseBudgetDataReturn {
       loadData
   ]);
 
+  const currencySymbol = useMemo(() => {
+    const import_Storage = require('../storage');
+    return import_Storage.CURRENCY_SYMBOLS[state?.currency || 'USD'] || '$';
+  }, [state?.currency]);
+
   return {
     state,
     loading,
     currentMonth,
+    currencySymbol,
     actions
   };
 }

@@ -21,7 +21,7 @@ const chartConfig = {
 import { BudgetState, Expense, AccountData } from '../../src/types';
 
 export default function AnalyticsScreen() {
-    const { state, loading, currentMonth, actions } = useBudgetData();
+    const { state, loading, currentMonth, currencySymbol, actions } = useBudgetData();
 
     // Reload data when screen comes into focus
     useFocusEffect(
@@ -155,7 +155,7 @@ export default function AnalyticsScreen() {
                                                 {budget > 0 ? `${actualPct.toFixed(0)}%` : 'No Budget'}
                                             </Text>
                                             <Text style={styles.budgetVal}>
-                                                ${spent.toFixed(0)} {budget > 0 ? `/ $${budget}` : ''}
+                                                {currencySymbol}{spent.toFixed(0)} {budget > 0 ? `/ ${currencySymbol}${budget}` : ''}
                                             </Text>
                                         </View>
                                     </View>

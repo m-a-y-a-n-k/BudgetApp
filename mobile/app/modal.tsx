@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useBudgetData } from '../src/hooks/useBudgetData';
 import { COLORS, SIZES } from '../src/theme';
@@ -8,7 +8,7 @@ import { todayISO } from '../src/storage';
 import { BudgetState, Expense } from '../src/types';
 
 export default function ModalScreen() {
-  const { state, actions } = useBudgetData();
+  const { state, currencySymbol, actions } = useBudgetData();
   const params = useLocalSearchParams();
   
   const [title, setTitle] = useState('');
@@ -20,6 +20,27 @@ export default function ModalScreen() {
   );
 
   const [errors, setErrors] = useState<{title?: string, amount?: string, date?: string}>({});
+  const isEditing = params.editMode === 'true';
+
+  useEffect(() => {
+    if (isEditing && params.expenseId && params.accountId && state) {
+        const acctId = String(params.accountId);
+        const expId = parseInt(params.expenseId as string);
+        
+        // Find expense in the current month across target account
+        const monthKey = state.currentMonth; // Use state's current month
+        const monthData = state.months[monthKey];
+        if (monthData && monthData.accounts[acctId]) {
+            const exp = monthData.accounts[acctId].expenses.find(e => e.id === expId);
+            if (exp) {
+                setTitle(exp.title);
+                setAmount(String(exp.amount));
+                setCategory(exp.category?.[0] || 'Groceries');
+                setDate(exp.date);
+            }
+        }
+    }
+  }, [isEditing, params.expenseId, params.accountId, state]);
 
   if (!state) return null;
 
@@ -52,13 +73,24 @@ export default function ModalScreen() {
       if (!validate()) return;
 
       const parsedAmount = parseFloat(amount);
-
-      await actions.addExpense({
+      const expenseData = {
           title: title.trim(), 
           amount: parsedAmount,
           date,
           category: [category]
-      }, targetAccountId || undefined);
+      };
+
+      if (isEditing && params.expenseId && params.accountId) {
+          await actions.editExpense(
+              parseInt(params.expenseId as string), 
+              parseInt(params.accountId as string), 
+              expenseData
+          );
+          Alert.alert("Success", "Expense updated");
+      } else {
+          await actions.addExpense(expenseData, targetAccountId || undefined);
+          Alert.alert("Success", "Expense added");
+      }
 
       router.dismiss();
   };
@@ -66,7 +98,7 @@ export default function ModalScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-          <Text style={styles.headerTitle}>Add Expense</Text>
+          <Text style={styles.headerTitle}>{isEditing ? 'Edit Expense' : 'Add Expense'}</Text>
           <TouchableOpacity onPress={() => router.dismiss()}>
               <Text style={styles.closeText}>Close</Text>
           </TouchableOpacity>
@@ -76,19 +108,22 @@ export default function ModalScreen() {
          {/* Amount */}
          <View style={styles.formGroup}>
              <Text style={styles.label}>Amount</Text>
-             <TextInput 
-                style={[styles.input, styles.amountInput, errors.amount && styles.inputError]}
-                placeholder="0.00"
-                keyboardType="decimal-pad"
-                value={amount}
-                onChangeText={(text) => {
-                  const sanitized = text.replace(/[^0-9.]/g, '');
-                  if (sanitized.split('.').length > 2) return;
-                  setAmount(sanitized);
-                  if (errors.amount) setErrors({...errors, amount: undefined});
-                }}
-                autoFocus
-             />
+             <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                 <Text style={[styles.currencyPrefix, errors.amount && {color: COLORS.danger}]}>{currencySymbol}</Text>
+                 <TextInput 
+                    style={[styles.input, styles.amountInput, {flex: 1}, errors.amount && styles.inputError]}
+                    placeholder="0.00"
+                    keyboardType="decimal-pad"
+                    value={amount}
+                    onChangeText={(text) => {
+                      const sanitized = text.replace(/[^0-9.]/g, '');
+                      if (sanitized.split('.').length > 2) return;
+                      setAmount(sanitized);
+                      if (errors.amount) setErrors({...errors, amount: undefined});
+                    }}
+                    autoFocus
+                 />
+             </View>
              {errors.amount && <Text style={styles.errorText}>{errors.amount}</Text>}
          </View>
 
@@ -218,7 +253,13 @@ const styles = StyleSheet.create({
    inputError: {
        borderColor: COLORS.danger,
    },
-   errorText: {
+    currencyPrefix: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: COLORS.text,
+        marginRight: 8,
+    },
+    errorText: {
        color: COLORS.danger,
        fontSize: 12,
        marginTop: 4,
