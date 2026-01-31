@@ -264,7 +264,7 @@ export function useBudgetData(): UseBudgetDataReturn {
       }
   }, [state, currentMonth, saveState]);
 
-  const addAccount = useCallback(async (name: string, type: string) => {
+  const addAccount = useCallback(async (name: string, type: string, initialBalance: number = 0) => {
       if (!state) return;
       const newId = Math.max(...state.accounts.map(a => a.id), 0) + 1;
       const newAccount = {
@@ -287,7 +287,11 @@ export function useBudgetData(): UseBudgetDataReturn {
               ...newState.months[monthKey],
               accounts: {
                   ...newState.months[monthKey].accounts,
-                  [String(newId)]: { income: 0, expenses: [], categoryBudgets: {} }
+                  [String(newId)]: { 
+                      income: monthKey === currentMonth ? initialBalance : 0, 
+                      expenses: [], 
+                      categoryBudgets: {} 
+                  }
               }
           };
       });

@@ -19,25 +19,42 @@ export default function ModalScreen() {
       params.accountId ? parseInt(params.accountId as string) : null
   );
 
+  const [errors, setErrors] = useState<{title?: string, amount?: string, date?: string}>({});
+
   if (!state) return null;
 
   const effectiveAcctId = targetAccountId || (state.activeAccountId === 'all' ? state.accounts[0].id : state.activeAccountId as number);
   const targetAccount = state.accounts.find(a => a.id === effectiveAcctId);
 
+  const validate = () => {
+    const newErrors: {title?: string, amount?: string, date?: string} = {};
+    if (!title.trim()) newErrors.title = 'Description is required';
+    
+    if (!amount) {
+        newErrors.amount = 'Amount is required';
+    } else {
+        const parsed = parseFloat(amount);
+        if (isNaN(parsed) || parsed <= 0) {
+            newErrors.amount = 'Enter a valid positive amount';
+        }
+    }
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+        newErrors.date = 'Use YYYY-MM-DD format';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSave = async () => {
-      if (!title || !amount) {
-          Alert.alert("Error", "Please enter title and amount");
-          return;
-      }
+      if (!validate()) return;
 
       const parsedAmount = parseFloat(amount);
-      if (isNaN(parsedAmount)) {
-          Alert.alert("Error", "Please enter a valid amount");
-          return;
-      }
 
       await actions.addExpense({
-          title, 
+          title: title.trim(), 
           amount: parsedAmount,
           date,
           category: [category]
@@ -60,35 +77,49 @@ export default function ModalScreen() {
          <View style={styles.formGroup}>
              <Text style={styles.label}>Amount</Text>
              <TextInput 
-                style={[styles.input, styles.amountInput]}
+                style={[styles.input, styles.amountInput, errors.amount && styles.inputError]}
                 placeholder="0.00"
                 keyboardType="decimal-pad"
                 value={amount}
-                onChangeText={setAmount}
+                onChangeText={(text) => {
+                  const sanitized = text.replace(/[^0-9.]/g, '');
+                  if (sanitized.split('.').length > 2) return;
+                  setAmount(sanitized);
+                  if (errors.amount) setErrors({...errors, amount: undefined});
+                }}
                 autoFocus
              />
+             {errors.amount && <Text style={styles.errorText}>{errors.amount}</Text>}
          </View>
 
          {/* Title */}
          <View style={styles.formGroup}>
              <Text style={styles.label}>Description</Text>
              <TextInput 
-                style={styles.input}
+                style={[styles.input, errors.title && styles.inputError]}
                 placeholder="What is this for?"
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(text) => {
+                    setTitle(text);
+                    if (errors.title) setErrors({...errors, title: undefined});
+                }}
              />
+             {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
          </View>
          
          {/* Date */}
          <View style={styles.formGroup}>
              <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
              <TextInput 
-                style={styles.input}
+                style={[styles.input, errors.date && styles.inputError]}
                 placeholder="YYYY-MM-DD"
                 value={date}
-                onChangeText={setDate}
+                onChangeText={(text) => {
+                    setDate(text);
+                    if (errors.date) setErrors({...errors, date: undefined});
+                }}
              />
+             {errors.date && <Text style={styles.errorText}>{errors.date}</Text>}
          </View>
 
          {/* Categories */}
@@ -179,10 +210,21 @@ const styles = StyleSheet.create({
       backgroundColor: COLORS.surface,
       padding: 16,
       borderRadius: SIZES.radius,
-      fontSize: 16,
-      color: COLORS.text,
-  },
-  amountInput: {
+       fontSize: 16,
+       color: COLORS.text,
+       borderWidth: 1,
+       borderColor: 'transparent',
+   },
+   inputError: {
+       borderColor: COLORS.danger,
+   },
+   errorText: {
+       color: COLORS.danger,
+       fontSize: 12,
+       marginTop: 4,
+       marginLeft: 4,
+   },
+   amountInput: {
       fontSize: 24,
       fontWeight: 'bold',
   },

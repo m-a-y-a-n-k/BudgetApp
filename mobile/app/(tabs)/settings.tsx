@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Switch } from 'react-native';
+import { useAuth } from '@/src/hooks/useAuth';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { useBudgetData } from '../../src/hooks/useBudgetData';
@@ -11,9 +12,11 @@ import * as Sharing from 'expo-sharing';
 
 export default function SettingsScreen() {
     const { state, actions, currentMonth } = useBudgetData();
+    const { toggleBiometrics, useBiometrics } = useAuth();
     const [newCategory, setNewCategory] = useState('');
     const [incomeInput, setIncomeInput] = useState('');
     const [newAccountName, setNewAccountName] = useState('');
+    const [initialBalance, setInitialBalance] = useState('');
     const [newAccountType, setNewAccountType] = useState('Checking');
     const [incomeAccountId, setIncomeAccountId] = useState<number | null>(null);
     const [renamingAccountId, setRenamingAccountId] = useState<number | null>(null);
@@ -37,30 +40,50 @@ export default function SettingsScreen() {
     const monthData = state.months[currentMonth] || { accounts: {} };
 
     const handleAddCategory = () => {
-        if(newCategory.trim() && selectedAccount) {
+        if (!newCategory.trim()) {
+            Alert.alert("Error", "Please enter a category name");
+            return;
+        }
+        if(selectedAccount) {
             actions.addCategory(newCategory.trim(), selectedAccount.id);
             setNewCategory('');
         }
     };
 
     const handleSetIncome = () => {
-        if(incomeInput && !isNaN(parseFloat(incomeInput))) {
-            const targetAcctId = incomeAccountId || (state.activeAccountId === 'all' || !state.activeAccountId 
-                ? (state.accounts.find(a => !a.archived) || state.accounts[0])?.id 
-                : state.activeAccountId as number);
-            
-            actions.setIncome(parseFloat(incomeInput), targetAcctId);
-            setIncomeInput('');
-            Alert.alert("Success", "Income updated");
+        if (!incomeInput) {
+            Alert.alert("Error", "Please enter income amount");
+            return;
         }
+        const amount = parseFloat(incomeInput);
+        if (isNaN(amount) || amount < 0) {
+            Alert.alert("Error", "Please enter a valid positive income amount");
+            return;
+        }
+
+        const targetAcctId = incomeAccountId || (state.activeAccountId === 'all' || !state.activeAccountId 
+            ? (state.accounts.find(a => !a.archived) || state.accounts[0])?.id 
+            : state.activeAccountId as number);
+        
+        actions.setIncome(amount, targetAcctId);
+        setIncomeInput('');
+        Alert.alert("Success", "Income updated");
     };
 
     const handleAddAccount = () => {
-        if(newAccountName.trim()) {
-            actions.addAccount(newAccountName.trim(), newAccountType);
-            setNewAccountName('');
-            Alert.alert("Success", "Account added");
+        if(!newAccountName.trim()) {
+            Alert.alert("Error", "Please enter an account name");
+            return;
         }
+        const balance = initialBalance ? parseFloat(initialBalance) : 0;
+        if (isNaN(balance)) {
+             Alert.alert("Error", "Please enter a valid initial balance");
+             return;
+        }
+        actions.addAccount(newAccountName.trim(), newAccountType, balance);
+        setNewAccountName('');
+        setInitialBalance('');
+        Alert.alert("Success", "Account added");
     };
 
     const handleRenameAccount = (id: number, currentName: string) => {
@@ -69,7 +92,11 @@ export default function SettingsScreen() {
     };
 
     const submitRename = () => {
-        if (renamingAccountId !== null && renamingName.trim()) {
+        if (renamingAccountId !== null) {
+            if (!renamingName.trim()) {
+                Alert.alert("Error", "Account name cannot be empty");
+                return;
+            }
             actions.renameAccount(renamingAccountId, renamingName.trim());
             setRenamingAccountId(null);
             setRenamingName('');
@@ -174,18 +201,24 @@ export default function SettingsScreen() {
                             })}
                         </ScrollView>
                     </View>
-                     <View style={styles.row}>
+
+                    <View style={styles.row}>
                         <TextInput 
                             style={styles.input}
-                            placeholder="Set Income"
-                            keyboardType="numeric"
+                            placeholder="Enter Monthly Income"
+                            keyboardType="decimal-pad"
                             value={incomeInput}
-                            onChangeText={setIncomeInput}
+                            onChangeText={(text) => {
+                                // Real-time numeric validation (allow only numbers and one decimal point)
+                                const sanitized = text.replace(/[^0-9.]/g, '');
+                                if (sanitized.split('.').length > 2) return;
+                                setIncomeInput(sanitized);
+                            }}
                         />
                         <TouchableOpacity style={styles.btnSmall} onPress={handleSetIncome}>
-                            <Text style={styles.btnText}>Save</Text>
+                            <Text style={styles.btnText}>Set</Text>
                         </TouchableOpacity>
-                     </View>
+                    </View>
                 </View>
 
                 {/* Currency */}
@@ -207,16 +240,29 @@ export default function SettingsScreen() {
                 {/* Accounts */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Manage Accounts</Text>
-                    <View style={styles.row}>
+                    <View style={styles.formGroupVertical}>
                         <TextInput 
-                            style={styles.input}
+                            style={styles.inputFull}
                             placeholder="Account Name"
                             value={newAccountName}
                             onChangeText={setNewAccountName}
                         />
-                        <TouchableOpacity style={styles.btnSmall} onPress={handleAddAccount}>
-                            <Text style={styles.btnText}>Add</Text>
-                        </TouchableOpacity>
+                        <View style={styles.row}>
+                            <TextInput 
+                                style={[styles.input, { flex: 1 }]}
+                                placeholder="Initial Balance (Optional)"
+                                keyboardType="decimal-pad"
+                                value={initialBalance}
+                                onChangeText={(text) => {
+                                    const sanitized = text.replace(/[^0-9.]/g, '');
+                                    if (sanitized.split('.').length > 2) return;
+                                    setInitialBalance(sanitized);
+                                }}
+                            />
+                            <TouchableOpacity style={styles.btnSmall} onPress={handleAddAccount}>
+                                <Text style={styles.btnText}>Add</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                     <View style={styles.pillsContainer}>
                         {accountTypes.map(type => (
@@ -317,12 +363,22 @@ export default function SettingsScreen() {
                                     </View>
                                     <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
                                         <TextInput 
+                                            key={`${selectedAccount.id}-${c}-${currentBudget}`}
                                             style={styles.budgetInput}
-                                            placeholder="Budget"
-                                            keyboardType="numeric"
+                                            placeholder="0.00"
+                                            keyboardType="decimal-pad"
                                             defaultValue={currentBudget > 0 ? String(currentBudget) : ''}
                                             onEndEditing={(e) => {
-                                                const val = parseFloat(e.nativeEvent.text);
+                                                const text = e.nativeEvent.text;
+                                                if (!text.trim()) {
+                                                    if (selectedAccount) actions.setCategoryBudget(c, 0, selectedAccount.id);
+                                                    return;
+                                                }
+                                                const val = parseFloat(text);
+                                                if (isNaN(val) || val < 0) {
+                                                    Alert.alert("Error", "Please enter a valid budget amount");
+                                                    return;
+                                                }
                                                 if (selectedAccount) actions.setCategoryBudget(c, val, selectedAccount.id);
                                             }}
                                         />
@@ -354,6 +410,24 @@ export default function SettingsScreen() {
                     </TouchableOpacity>
                 </View>
 
+                {/* Security */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Security</Text>
+                    <View style={styles.securityRow}>
+                        <View>
+                            <Text style={styles.securityLabel}>Use Biometrics</Text>
+                            <Text style={styles.securityDesc}>Prompt for FaceID/Fingerprint on app start</Text>
+                        </View>
+                        <Switch 
+                            value={useBiometrics}
+                            onValueChange={(val) => { toggleBiometrics(val); }}
+                            trackColor={{ false: COLORS.muted, true: COLORS.primaryLight }}
+                            thumbColor={useBiometrics ? COLORS.primary : '#f4f3f4'}
+                        />
+                    </View>
+                </View>
+
+                <View style={{ height: 40 }} />
             </ScrollView>
         </SafeAreaView>
     );
@@ -536,5 +610,64 @@ const styles = StyleSheet.create({
     },
     dangerBtnText: {
         color: '#fff',
+    },
+    securityRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.bg,
+    },
+    securityLabel: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: COLORS.text,
+    },
+    securityDesc: {
+        fontSize: 12,
+        color: COLORS.muted,
+        marginTop: 2,
+    },
+    userSection: {
+        marginTop: 16,
+        padding: 12,
+        backgroundColor: COLORS.bg,
+        borderRadius: 12,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    formGroupVertical: {
+        flexDirection: 'column',
+        gap: 10,
+        marginBottom: 10,
+    },
+    inputFull: {
+        backgroundColor: COLORS.bg,
+        padding: 12,
+        borderRadius: 8,
+        fontSize: 16,
+        color: COLORS.text,
+    },
+    userInfo: {
+        flex: 1,
+    },
+    userEmail: {
+        fontSize: 14,
+        color: COLORS.text,
+        fontWeight: '600',
+    },
+    userName: {
+        fontSize: 12,
+        color: COLORS.muted,
+    },
+    signOutBtn: {
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+    },
+    signOutText: {
+        color: COLORS.danger,
+        fontWeight: 'bold',
     }
 });

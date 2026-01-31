@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Dimensions, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PieChart, BarChart } from 'react-native-chart-kit';
 import { useFocusEffect } from 'expo-router';
@@ -63,10 +63,13 @@ export default function AnalyticsScreen() {
         });
     });
 
+    // Sort categories by expenditure
+    const allCategories = Array.from(new Set([...Object.keys(categoryTotals), ...Object.keys(aggregatedBudgets)]))
+        .sort((a, b) => (categoryTotals[b] || 0) - (categoryTotals[a] || 0));
+
     // Prepare Pie Chart Data
     const pieData = Object.keys(categoryTotals).map((cat, index) => {
-        // Generate random color if not enough predefined
-        const colors = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#60a5fa', '#a78bfa', '#e879f9']; 
+        const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4']; 
         return {
             name: cat,
             population: categoryTotals[cat],
@@ -79,8 +82,31 @@ export default function AnalyticsScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView>
-                <Text style={styles.headerTitle}>Analytics</Text>
-                <Text style={styles.subHeader}>{currentMonth}</Text>
+                <View style={styles.header}>
+                    <View>
+                        <Text style={styles.headerTitle}>Analytics</Text>
+                        <Text style={styles.subHeader}>{currentMonth}</Text>
+                    </View>
+                    <View style={styles.accountSelector}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            <TouchableOpacity 
+                                style={[styles.accountBadge, state.activeAccountId === 'all' && styles.accountBadgeActive]}
+                                onPress={() => actions.switchAccount('all')}
+                            >
+                                <Text style={[styles.accountBadgeText, state.activeAccountId === 'all' && styles.accountBadgeTextActive]}>All</Text>
+                            </TouchableOpacity>
+                            {state.accounts.filter(a => !a.archived).map(acct => (
+                                <TouchableOpacity 
+                                    key={acct.id}
+                                    style={[styles.accountBadge, state.activeAccountId === acct.id && styles.accountBadgeActive]}
+                                    onPress={() => actions.switchAccount(acct.id)}
+                                >
+                                    <Text style={[styles.accountBadgeText, state.activeAccountId === acct.id && styles.accountBadgeTextActive]}>{acct.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
 
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Spending by Category</Text>
@@ -104,25 +130,29 @@ export default function AnalyticsScreen() {
                 {/* Budget Progress */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Budget Goals</Text>
-                    {Object.keys(categoryTotals).length === 0 ? (
+                    {allCategories.length === 0 ? (
                         <Text style={styles.emptyText}>No spending yet</Text>
                     ) : (
-                        Object.keys({ ...categoryTotals, ...aggregatedBudgets }).map(cat => {
+                        allCategories.map(cat => {
                             const spent = categoryTotals[cat] || 0;
                             const budget = aggregatedBudgets[cat] || 0;
-                            if (spent === 0 && budget === 0) return null;
-                            const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+                            
+                            // Calculate percentage for progress bar (capped at 100)
+                            const displayPct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+                            // Calculate actual percentage for text and color
+                            const actualPct = budget > 0 ? (spent / budget) * 100 : 0;
+                            
                             let color = COLORS.success;
-                            if (pct > 75) color = '#f59e0b';
-                            if (pct >= 100) color = COLORS.danger;
+                            if (actualPct >= 75) color = COLORS.warning;
+                            if (actualPct > 100) color = COLORS.danger;
 
                             return (
                                 <View key={cat} style={styles.budgetRow}>
                                     <View style={styles.budgetHeader}>
                                         <Text style={styles.budgetCat}>{cat}</Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <Text style={[styles.budgetVal, { fontWeight: 'bold', color: color, marginRight: 8 }]}>
-                                                {budget > 0 ? `${((spent / budget) * 100).toFixed(0)}%` : '0%'}
+                                            <Text style={[styles.budgetVal, { fontWeight: '600', color: color, marginRight: 8 }]}>
+                                                {budget > 0 ? `${actualPct.toFixed(0)}%` : 'No Budget'}
                                             </Text>
                                             <Text style={styles.budgetVal}>
                                                 ${spent.toFixed(0)} {budget > 0 ? `/ $${budget}` : ''}
@@ -131,7 +161,7 @@ export default function AnalyticsScreen() {
                                     </View>
                                     {budget > 0 && (
                                         <View style={styles.progressBarBg}>
-                                            <View style={[styles.progressBarFill, { width: `${pct}%`, backgroundColor: color }]} />
+                                            <View style={[styles.progressBarFill, { width: `${displayPct}%`, backgroundColor: color }]} />
                                         </View>
                                     )}
                                 </View>
@@ -163,9 +193,36 @@ const styles = StyleSheet.create({
         color: COLORS.text,
     },
     subHeader: {
-        fontSize: 16,
+        fontSize: 14,
         color: COLORS.muted,
+    },
+    header: {
         marginBottom: 20,
+    },
+    accountSelector: {
+        marginTop: 12,
+        flexDirection: 'row',
+    },
+    accountBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: COLORS.surface,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    accountBadgeActive: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary,
+    },
+    accountBadgeText: {
+        fontSize: 12,
+        color: COLORS.text,
+    },
+    accountBadgeTextActive: {
+        color: '#fff',
+        fontWeight: 'bold',
     },
     section: {
         backgroundColor: COLORS.surface,

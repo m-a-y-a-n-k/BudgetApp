@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "Vridhi",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Allow BudgetApp to use FaceID for secure access to your financial data."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -38,7 +41,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-local-authentication"
     ],
     "experiments": {
       "typedRoutes": true,

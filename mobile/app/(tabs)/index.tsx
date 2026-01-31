@@ -85,7 +85,7 @@ export default function DashboardScreen() {
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={{ flex: 1 }}>
-        <Text style={styles.welcomeText}>Budget App</Text>
+        <Text style={styles.welcomeText}>Vridhi</Text>
         <View style={styles.monthNav}>
           <TouchableOpacity onPress={() => navigateMonth(-1)} style={styles.monthBtn}>
             <Text style={styles.monthBtnText}>←</Text>
