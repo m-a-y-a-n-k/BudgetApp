@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, FlatList, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useBudgetData } from '../../src/hooks/useBudgetData';
-import { COLORS, SIZES } from '../../src/theme';
+import { COLORS, SIZES, SHADOWS, CATEGORY_ICONS } from '../../src/theme';
 import { formatMonthKey } from '../../src/storage';
-
 import { BudgetState, Expense, AccountData } from '../../src/types';
+
+const { width } = Dimensions.get('window');
+
+
 
 export default function DashboardScreen() {
   const { state, loading, currentMonth, currencySymbol, actions } = useBudgetData();
 
-  // Reload data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       actions.loadData();
@@ -28,11 +32,9 @@ export default function DashboardScreen() {
 
   const monthData = state.months[currentMonth] || { accounts: {} };
   
-  // Calculate totals
   let totalIncome = 0;
   let totalExpense = 0;
   let allExpenses: (Expense & { accountId?: number })[] = [];
-  let categoryTotals: { [key: string]: number } = {}; // Initialize categoryTotals
 
   Object.entries(monthData.accounts).forEach(([acctId, acct]) => {
     const id = parseInt(acctId);
@@ -43,17 +45,12 @@ export default function DashboardScreen() {
       const val = (exp.amount || 0);
       totalExpense += val;
       allExpenses.push({ ...exp, accountId: id });
-
-      // Aggregate data for category totals
-      const cat = exp.category ? exp.category[0] : 'Other';
-      categoryTotals[cat] = (categoryTotals[cat] || 0) + val;
     });
   });
 
   const balance = totalIncome - totalExpense;
   const savingsRate = totalIncome > 0 ? ((balance / totalIncome) * 100).toFixed(1) : '0.0';
 
-  // Month navigation
   const navigateMonth = (direction: number) => {
     const [year, month] = currentMonth.split('-').map(Number);
     const date = new Date(year, month - 1, 1);
@@ -62,13 +59,11 @@ export default function DashboardScreen() {
     actions.changeMonth(newMonth);
   };
 
-  // Handle delete expense
   const handleDeleteExpense = (expense: Expense & { accountId?: number }) => {
     const accountId = expense.accountId || (state.activeAccountId === 'all' ? state.accounts[0].id : state.activeAccountId);
     actions.deleteExpense(expense.id, accountId);
   };
 
-  // Handle edit expense
   const handleEditExpense = (expense: Expense & { accountId?: number }) => {
     const accountId = expense.accountId || (state.activeAccountId === 'all' ? state.accounts[0].id : state.activeAccountId);
     router.push({
@@ -81,28 +76,43 @@ export default function DashboardScreen() {
     });
   };
 
-  // Render Header
   const renderHeader = () => (
     <View style={styles.header}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.welcomeText}>Vridhi</Text>
-        <View style={styles.monthNav}>
-          <TouchableOpacity onPress={() => navigateMonth(-1)} style={styles.monthBtn}>
-            <Text style={styles.monthBtnText}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.dateText}>{currentMonth}</Text>
-          <TouchableOpacity onPress={() => navigateMonth(1)} style={styles.monthBtn}>
-            <Text style={styles.monthBtnText}>→</Text>
-          </TouchableOpacity>
+      <View style={styles.headerTop}>
+        <View>
+          <Text style={styles.greetingText}>Welcome back,</Text>
+          <Text style={styles.brandTitle}>Vridhi</Text>
         </View>
+        <TouchableOpacity style={styles.profileBtn}>
+          <LinearGradient
+            colors={COLORS.gradientPrimary}
+            style={styles.profileGradient}
+          >
+            <Ionicons name="person" size={20} color="#fff" />
+          </LinearGradient>
+        </TouchableOpacity>
       </View>
+
+      <View style={styles.monthNavRow}>
+        <TouchableOpacity onPress={() => navigateMonth(-1)} style={styles.monthNavIcon}>
+          <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
+        <View style={styles.monthDisplay}>
+          <Ionicons name="calendar-outline" size={16} color={COLORS.muted} style={{ marginRight: 6 }} />
+          <Text style={styles.dateText}>{currentMonth}</Text>
+        </View>
+        <TouchableOpacity onPress={() => navigateMonth(1)} style={styles.monthNavIcon}>
+          <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.accountSelector}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
           <TouchableOpacity 
             style={[styles.accountBadge, state.activeAccountId === 'all' && styles.accountBadgeActive]}
             onPress={() => actions.switchAccount('all')}
           >
-            <Text style={[styles.accountBadgeText, state.activeAccountId === 'all' && styles.accountBadgeTextActive]}>All</Text>
+            <Text style={[styles.accountBadgeText, state.activeAccountId === 'all' && styles.accountBadgeTextActive]}>All Accounts</Text>
           </TouchableOpacity>
           {state.accounts.filter(a => !a.archived).map(acct => (
             <TouchableOpacity 
@@ -118,73 +128,122 @@ export default function DashboardScreen() {
     </View>
   );
 
-  // Render Cards
-  const renderCards = () => (
-    <View style={styles.cardContainer}>
-      <View style={[styles.card, { backgroundColor: COLORS.primary }]}>
-        <Text style={styles.cardLabel}>Balance</Text>
-        <Text style={styles.cardValue}>{currencySymbol}{balance.toFixed(2)}</Text>
-        <Text style={styles.cardSubtext}>Savings Rate: {savingsRate}%</Text>
-      </View>
-      <View style={styles.row}>
-         <View style={[styles.card, styles.halfCard, { backgroundColor: COLORS.success }]}>
-            <Text style={styles.cardLabel}>Income</Text>
-            <Text style={styles.cardValue}>{currencySymbol}{totalIncome.toFixed(2)}</Text>
-         </View>
-         <View style={[styles.card, styles.halfCard, { backgroundColor: COLORS.danger }]}>
-            <Text style={styles.cardLabel}>Expenses</Text>
-            <Text style={styles.cardValue}>{currencySymbol}{totalExpense.toFixed(2)}</Text>
-         </View>
+  const renderSummaryCards = () => (
+    <View style={styles.summaryContainer}>
+      <LinearGradient
+        colors={COLORS.gradientPrimary}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.mainCard, SHADOWS.large]}
+      >
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardLabel}>TOTAL BALANCE</Text>
+          <View style={styles.savingsBadge}>
+            <Text style={styles.savingsText}>{savingsRate}% saved</Text>
+          </View>
+        </View>
+        <Text style={styles.cardValue}>{currencySymbol}{balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+        <View style={styles.cardFooter}>
+          <View style={styles.footerItem}>
+            <Ionicons name="arrow-up-circle" size={16} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.footerText}>Income: {currencySymbol}{totalIncome.toFixed(0)}</Text>
+          </View>
+          <View style={styles.footerItem}>
+            <Ionicons name="arrow-down-circle" size={16} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.footerText}>Spent: {currencySymbol}{totalExpense.toFixed(0)}</Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      <View style={styles.miniCardsRow}>
+        <View style={[styles.miniCard, { backgroundColor: COLORS.successLight }]}>
+          <View style={[styles.miniIconBg, { backgroundColor: COLORS.success }]}>
+            <Ionicons name="trending-up" size={16} color="#fff" />
+          </View>
+          <Text style={styles.miniLabel}>Income</Text>
+          <Text style={[styles.miniValue, { color: COLORS.success }]}>+{currencySymbol}{totalIncome.toFixed(0)}</Text>
+        </View>
+        <View style={[styles.miniCard, { backgroundColor: COLORS.dangerLight }]}>
+          <View style={[styles.miniIconBg, { backgroundColor: COLORS.danger }]}>
+            <Ionicons name="trending-down" size={16} color="#fff" />
+          </View>
+          <Text style={styles.miniLabel}>Expenses</Text>
+          <Text style={[styles.miniValue, { color: COLORS.danger }]}>-{currencySymbol}{totalExpense.toFixed(0)}</Text>
+        </View>
       </View>
     </View>
   );
 
-  // Render Expense Item
-  const renderExpense = (item: Expense & { accountId?: number }, index: number) => (
-    <TouchableOpacity 
-      key={index}
-      style={styles.expenseItem}
-      onPress={() => handleEditExpense(item)}
-      onLongPress={() => handleEditExpense(item)}
-      delayLongPress={500}
-    >
-      <View style={styles.catBadge}>
-        <Text style={styles.catText}>{(item.category?.[0] || '?')[0].toUpperCase()}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.expTitle}>{item.title}</Text>
-        <Text style={styles.expCat}>{item.category?.[0] || 'Uncategorized'}</Text>
-        <Text style={styles.expDate}>{item.date || 'No date'}</Text>
-      </View>
-      <View style={styles.expenseRight}>
-        <Text style={styles.expAmount}>- {currencySymbol}{item.amount.toFixed(2)}</Text>
-        <TouchableOpacity 
-          onPress={() => handleDeleteExpense(item)}
-          style={styles.deleteBtn}
-        >
-          <Text style={styles.deleteText}>×</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderExpense = (item: Expense & { accountId?: number }, index: number) => {
+    const category = item.category?.[0] || 'Other';
+    const iconName = CATEGORY_ICONS[category] || 'help-circle';
+    
+    return (
+      <TouchableOpacity 
+        key={item.id}
+        style={styles.expenseItem}
+        onPress={() => handleEditExpense(item)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.catIconBg, { backgroundColor: COLORS.bg }]}>
+          <Ionicons name={iconName as any} size={22} color={COLORS.primary} />
+        </View>
+        <View style={styles.expInfo}>
+          <Text style={styles.expTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={styles.expCat}>{category} • {item.date || 'No date'}</Text>
+        </View>
+        <View style={styles.expRight}>
+          <Text style={styles.expAmount}>-{currencySymbol}{item.amount.toFixed(2)}</Text>
+          <TouchableOpacity 
+            onPress={() => handleDeleteExpense(item)}
+            style={styles.deleteAction}
+          >
+            <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 120 }}
+      >
         {renderHeader()}
-        {renderCards()}
+        {renderSummaryCards()}
         
-        <Text style={styles.sectionTitle}>Recent Transactions</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Activities</Text>
+          <TouchableOpacity>
+            <Text style={styles.seeAllText}>See All</Text>
+          </TouchableOpacity>
+        </View>
+
         {allExpenses.length === 0 ? (
-          <Text style={styles.emptyText}>No expenses yet.</Text>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="document-text-outline" size={64} color={COLORS.muted} />
+            <Text style={styles.emptyText}>No recent transactions found</Text>
+          </View>
         ) : (
-            allExpenses.reverse().map((item, index) => renderExpense(item, index))
+          <View style={styles.listContainer}>
+            {[...allExpenses].reverse().map((item, index) => renderExpense(item, index))}
+          </View>
         )}
       </ScrollView>
       
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/modal')}>
-        <Text style={styles.fabText}>+</Text>
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => router.push('/modal')}
+        activeOpacity={0.8}
+      >
+        <LinearGradient
+          colors={COLORS.gradientPrimary}
+          style={styles.fabGradient}
+        >
+          <Ionicons name="add" size={32} color="#fff" />
+        </LinearGradient>
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -194,193 +253,263 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.bg,
-    padding: SIZES.padding,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: COLORS.bg,
   },
   header: {
+    paddingHorizontal: SIZES.padding,
+    paddingTop: 10,
     marginBottom: 20,
   },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.text,
-  },
-  monthNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    gap: 12,
-  },
-  monthBtn: {
-    padding: 8,
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
-  },
-  monthBtnText: {
-    fontSize: 18,
-    color: COLORS.primary,
-    fontWeight: 'bold',
-  },
-  dateText: {
-    fontSize: 16,
-    color: COLORS.muted,
-  },
-  cardContainer: {
-    marginBottom: 24,
-  },
-  card: {
-    padding: 20,
-    borderRadius: SIZES.radius,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  row: {
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  halfCard: {
-    width: '48%',
+  greetingText: {
+    fontSize: 14,
+    color: COLORS.textLight,
+    fontWeight: '500',
+  },
+  brandTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.text,
+    letterSpacing: -0.5,
+  },
+  profileBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    ...SHADOWS.small,
+  },
+  profileGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    padding: 10,
+    borderRadius: SIZES.radiusMedium,
+    ...SHADOWS.small,
+    marginBottom: 16,
+  },
+  monthNavIcon: {
+    padding: 4,
+  },
+  monthDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  accountSelector: {
+    flexDirection: 'row',
+  },
+  accountBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: SIZES.radiusFull,
+    backgroundColor: COLORS.surface,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    ...SHADOWS.small,
+  },
+  accountBadgeActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primaryLight,
+  },
+  accountBadgeText: {
+    fontSize: 13,
+    color: COLORS.textLight,
+    fontWeight: '600',
+  },
+  accountBadgeTextActive: {
+    color: '#fff',
+  },
+  summaryContainer: {
+    paddingHorizontal: SIZES.padding,
+    marginBottom: 24,
+  },
+  mainCard: {
+    padding: 24,
+    borderRadius: SIZES.radiusLarge,
+    marginBottom: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   cardLabel: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    marginBottom: 4,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  savingsBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  savingsText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
   },
   cardValue: {
     color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 36,
+    fontWeight: '800',
+    marginBottom: 16,
   },
-  cardSubtext: {
-    color: 'rgba(255,255,255,0.7)',
+  cardFooter: {
+    flexDirection: 'row',
+    gap: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingTop: 16,
+  },
+  footerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  footerText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  miniCardsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  miniCard: {
+    width: (width - SIZES.padding * 2 - 12) / 2,
+    padding: 16,
+    borderRadius: SIZES.radiusMedium,
+    ...SHADOWS.small,
+  },
+  miniIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  miniLabel: {
     fontSize: 12,
-    marginTop: 4,
+    color: COLORS.textLight,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  miniValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SIZES.padding,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.text,
-    marginBottom: 12,
+  },
+  seeAllText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  listContainer: {
+    paddingHorizontal: SIZES.padding,
   },
   expenseItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.surface,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
+    padding: 12,
+    borderRadius: SIZES.radiusMedium,
+    marginBottom: 12,
+    ...SHADOWS.small,
   },
-  catBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.bg,
+  catIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
-  catText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+  expInfo: {
+    flex: 1,
   },
   expTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.text,
+    marginBottom: 2,
   },
   expCat: {
-    fontSize: 13,
-    color: COLORS.primary,
-    fontWeight: '500',
-    marginTop: 1,
+    fontSize: 12,
+    color: COLORS.textLight,
   },
-  expDate: {
-    fontSize: 11,
-    color: COLORS.muted,
-    marginTop: 1,
-  },
-  expenseRight: {
+  expRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   expAmount: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.danger,
   },
-  deleteBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.danger,
-    justifyContent: 'center',
-    alignItems: 'center',
+  deleteAction: {
+    padding: 4,
   },
-  deleteText: {
-    fontSize: 20,
-    color: '#fff',
-    fontWeight: 'bold',
-    marginTop: -2,
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
   },
   emptyText: {
-    textAlign: 'center',
+    marginTop: 12,
     color: COLORS.muted,
-    marginTop: 20,
+    fontSize: 15,
   },
   fab: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 30,
     right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.primary,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    ...SHADOWS.colored(COLORS.primary),
+  },
+  fabGradient: {
+    flex: 1,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
-  fabText: {
-    fontSize: 32,
-    color: '#fff',
-    marginTop: -4
-  },
-  accountSelector: {
-    marginTop: 12,
-    flexDirection: 'row',
-  },
-  accountBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: COLORS.surface,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  accountBadgeActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  accountBadgeText: {
-    fontSize: 12,
-    color: COLORS.text,
-  },
-  accountBadgeTextActive: {
-    color: '#fff',
-    fontWeight: 'bold',
-  }
 });

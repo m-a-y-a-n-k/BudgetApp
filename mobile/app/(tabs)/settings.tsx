@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Switch, Dimensions } from 'react-native';
 import { useAuth } from '@/src/hooks/useAuth';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useBudgetData } from '../../src/hooks/useBudgetData';
-import { COLORS, SIZES } from '../../src/theme';
+import { COLORS, SIZES, SHADOWS } from '../../src/theme';
 import { Account, AccountData, Expense } from '../../src/types';
 import * as XLSX from 'xlsx';
 import { Paths, File } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
+const { width } = Dimensions.get('window');
+
 export default function SettingsScreen() {
     const { state, actions, currentMonth, currencySymbol } = useBudgetData();
-    const { toggleBiometrics, useBiometrics } = useAuth();
+    const { toggleBiometrics, useBiometrics, setUnlocked } = useAuth();
     const [newCategory, setNewCategory] = useState('');
     const [incomeInput, setIncomeInput] = useState('');
     const [lastSyncAcctId, setLastSyncAcctId] = useState<number | null>(null);
@@ -26,7 +30,6 @@ export default function SettingsScreen() {
     const [localBudgets, setLocalBudgets] = useState<{[key: string]: string}>({});
     const [budgetsModified, setBudgetsModified] = useState(false);
 
-    // Reload data when screen comes into focus
     useFocusEffect(
         React.useCallback(() => {
             actions.loadData();
@@ -36,7 +39,6 @@ export default function SettingsScreen() {
     const effectiveIncomeAccountId = incomeAccountId || (state?.activeAccountId === 'all' ? state?.accounts[0]?.id : state?.activeAccountId as number);
     const effectiveCatAccountId = catAccountId || (state?.activeAccountId === 'all' ? state?.accounts[0]?.id : state?.activeAccountId as number);
 
-    // Sync income input when account or state changes
     React.useEffect(() => {
         if (!state) return;
         if (effectiveIncomeAccountId !== lastSyncAcctId) {
@@ -48,7 +50,6 @@ export default function SettingsScreen() {
         }
     }, [state, currentMonth, effectiveIncomeAccountId, lastSyncAcctId]);
 
-    // Sync category budgets when account changes
     React.useEffect(() => {
         if (!state || budgetsModified) return;
         const acctId = effectiveCatAccountId;
@@ -68,7 +69,6 @@ export default function SettingsScreen() {
     const accountTypes = ["Checking", "Savings", "Credit Card", "Cash"];
 
     const selectedAccount = state.accounts.find(a => a.id === effectiveCatAccountId);
-    const monthData = state.months[currentMonth] || { accounts: {} };
 
     const handleAddCategory = () => {
         if (!newCategory.trim()) {
@@ -91,13 +91,11 @@ export default function SettingsScreen() {
             Alert.alert("Error", "Please enter a valid positive income amount");
             return;
         }
-
         const targetAcctId = incomeAccountId || (state.activeAccountId === 'all' || !state.activeAccountId 
             ? (state.accounts.find(a => !a.archived) || state.accounts[0])?.id 
             : state.activeAccountId as number);
         
         actions.setIncome(amount, targetAcctId);
-        // Do not clear incomeInput, keep it reflecting current value
         Alert.alert("Success", "Income updated");
     };
 
@@ -136,7 +134,6 @@ export default function SettingsScreen() {
 
     const handleSaveBudgets = async () => {
         if (!selectedAccount) return;
-        
         const finalBudgets: { [category: string]: number } = {};
         let hasError = false;
 
@@ -160,18 +157,13 @@ export default function SettingsScreen() {
     };
 
     const handleExportExcel = async () => {
-        if (!state) return;
-
         try {
             const allExpensesList: any[] = [];
-            
-            // Flatten all expenses from all months and accounts
             Object.keys(state.months).forEach(monthKey => {
                 const monthInfo = state.months[monthKey];
                 Object.keys(monthInfo.accounts).forEach(acctId => {
                     const acctData = monthInfo.accounts[acctId];
                     const accountName = state.accounts.find(a => String(a.id) === acctId)?.name || 'Unknown';
-                    
                     acctData.expenses.forEach(exp => {
                         allExpensesList.push({
                             'Date': exp.date,
@@ -189,26 +181,18 @@ export default function SettingsScreen() {
                 return;
             }
 
-            // Create worksheet
             const ws = XLSX.utils.json_to_sheet(allExpensesList);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Expenses");
-
-            // Generate base64
             const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-            
             const file = new File(Paths.cache, 'budget_export.xlsx');
-            file.write(wbout, {
-                encoding: 'base64'
-            });
-
+            file.write(wbout, { encoding: 'base64' });
             await Sharing.shareAsync(file.uri, {
                 mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 dialogTitle: 'Export Budget Data',
                 UTI: 'com.microsoft.excel.xlsx'
             });
         } catch (e) {
-            console.error("Export failed", e);
             Alert.alert("Error", "Failed to export data");
         }
     };
@@ -233,55 +217,72 @@ export default function SettingsScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <ScrollView>
-                <Text style={styles.headerTitle}>Settings</Text>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>Settings</Text>
+                    
+                    {/* User Profile Card */}
+                    <LinearGradient
+                        colors={COLORS.gradientSecondary}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.userCard}
+                    >
+                        <View style={styles.userIconBg}>
+                            <Ionicons name="person" size={24} color="#fff" />
+                        </View>
+                        <View style={styles.userInfo}>
+                            <Text style={styles.userEmail}>Local Data</Text>
+                            <Text style={styles.userName}>Offline Mode</Text>
+                        </View>
+                        <TouchableOpacity style={styles.signOutBtn} onPress={() => setUnlocked(false)}>
+                            <Ionicons name="lock-closed-outline" size={24} color="#fff" />
+                        </TouchableOpacity>
+                    </LinearGradient>
+                </View>
 
-                {/* Income */}
+                {/* Section: Monthly Income */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Monthly Income</Text>
-                    <Text style={styles.helperText}>Select account to set income for:</Text>
-                    <View style={styles.accountSelector}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            {state.accounts.filter(a => !a.archived).map(acct => {
-                                const isSelected = effectiveIncomeAccountId === acct.id;
-                                return (
-                                    <TouchableOpacity 
-                                        key={acct.id} 
-                                        style={[styles.accountPill, isSelected && styles.accountPillActive]}
-                                        onPress={() => setIncomeAccountId(acct.id)}
-                                    >
-                                        <Text style={[styles.accountPillText, isSelected && styles.accountPillTextActive]}>{acct.name}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
+                    <View style={styles.sectionHeader}>
+                        <Ionicons name="wallet-outline" size={20} color={COLORS.primary} style={styles.sectionIcon} />
+                        <Text style={styles.sectionTitle}>Income Settings</Text>
                     </View>
-
-                    <View style={styles.row}>
-                        <View style={{flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8}}>
+                    <Text style={styles.helperText}>Select account to update monthly income:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.accountSelector}>
+                        {state.accounts.filter(a => !a.archived).map(acct => (
+                            <TouchableOpacity 
+                                key={acct.id} 
+                                style={[styles.accountPill, effectiveIncomeAccountId === acct.id && styles.accountPillActive]}
+                                onPress={() => setIncomeAccountId(acct.id)}
+                            >
+                                <Text style={[styles.accountPillText, effectiveIncomeAccountId === acct.id && styles.accountPillTextActive]}>{acct.name}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                    <View style={styles.inputGroup}>
+                        <View style={styles.inputWithIcon}>
                             <Text style={styles.currencyPrefix}>{currencySymbol}</Text>
                             <TextInput 
-                                style={[styles.input, {flex: 1}]}
-                                placeholder="Enter Monthly Income"
+                                style={styles.input}
+                                placeholder="0.00"
                                 keyboardType="decimal-pad"
                                 value={incomeInput}
-                                onChangeText={(text) => {
-                                    // Real-time numeric validation (allow only numbers and one decimal point)
-                                    const sanitized = text.replace(/[^0-9.]/g, '');
-                                    if (sanitized.split('.').length > 2) return;
-                                    setIncomeInput(sanitized);
-                                }}
+                                onChangeText={setIncomeInput}
                             />
                         </View>
                         <TouchableOpacity style={styles.btnSmall} onPress={handleSetIncome}>
-                            <Text style={styles.btnText}>Set</Text>
+                            <Text style={styles.btnText}>Update</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Currency */}
+                {/* Section: Currency */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Currency</Text>
+                    <View style={styles.sectionHeader}>
+                        <Ionicons name="cash-outline" size={20} color={COLORS.primary} style={styles.sectionIcon} />
+                        <Text style={styles.sectionTitle}>Preferences</Text>
+                    </View>
+                    <Text style={styles.helperText}>Base Currency</Text>
                     <View style={styles.pillsContainer}>
                         {currencies.map(c => (
                             <TouchableOpacity 
@@ -293,197 +294,11 @@ export default function SettingsScreen() {
                             </TouchableOpacity>
                         ))}
                     </View>
-                </View>
-
-                {/* Accounts */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Manage Accounts</Text>
-                    <View style={styles.formGroupVertical}>
-                        <TextInput 
-                            style={styles.inputFull}
-                            placeholder="Account Name"
-                            value={newAccountName}
-                            onChangeText={setNewAccountName}
-                        />
-                        <View style={styles.row}>
-                            <View style={{flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8}}>
-                                <Text style={styles.currencyPrefix}>{currencySymbol}</Text>
-                                <TextInput 
-                                    style={[styles.input, { flex: 1 }]}
-                                    placeholder="Initial Balance (Optional)"
-                                    keyboardType="decimal-pad"
-                                    value={initialBalance}
-                                    onChangeText={(text) => {
-                                        const sanitized = text.replace(/[^0-9.]/g, '');
-                                        if (sanitized.split('.').length > 2) return;
-                                        setInitialBalance(sanitized);
-                                    }}
-                                />
-                            </View>
-                            <TouchableOpacity style={styles.btnSmall} onPress={handleAddAccount}>
-                                <Text style={styles.btnText}>Add</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                    <View style={styles.pillsContainer}>
-                        {accountTypes.map(type => (
-                            <TouchableOpacity 
-                                key={type}
-                                style={[styles.pill, newAccountType === type && styles.pillActive]}
-                                onPress={() => setNewAccountType(type)}
-                            >
-                                <Text style={[styles.pillText, newAccountType === type && styles.pillTextActive]}>{type}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                    <View style={styles.accountList}>
-                        {state.accounts.map(acct => (
-                            <View key={acct.id} style={styles.accountItem}>
-                                <View style={{ flex: 1 }}>
-                                    {renamingAccountId === acct.id ? (
-                                        <View style={styles.renameContainer}>
-                                            <TextInput 
-                                                style={styles.renameInput}
-                                                value={renamingName}
-                                                onChangeText={setRenamingName}
-                                                autoFocus
-                                            />
-                                            <View style={{flexDirection: 'row', gap: 10}}>
-                                                <TouchableOpacity onPress={submitRename}>
-                                                    <Text style={styles.saveRenameText}>Save</Text>
-                                                </TouchableOpacity>
-                                                <TouchableOpacity onPress={() => setRenamingAccountId(null)}>
-                                                    <Text style={styles.cancelRenameText}>Cancel</Text>
-                                                </TouchableOpacity>
-                                            </View>
-                                        </View>
-                                    ) : (
-                                        <>
-                                            <Text style={styles.accountName}>{acct.name}</Text>
-                                            <Text style={styles.accountMeta}>{acct.type}{acct.archived ? ' • Archived' : ''}</Text>
-                                        </>
-                                    )}
-                                </View>
-                                {renamingAccountId !== acct.id && (
-                                    <View style={{flexDirection: 'row', gap: 12}}>
-                                        <TouchableOpacity onPress={() => handleRenameAccount(acct.id, acct.name)}>
-                                            <Text style={{color: COLORS.primary}}>Rename</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity onPress={() => actions.archiveAccount(acct.id, !acct.archived)}>
-                                            <Text style={{color: acct.archived ? COLORS.success : COLORS.muted}}>
-                                                {acct.archived ? 'Unarchive' : 'Archive'}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                )}
-                            </View>
-                        ))}
-                    </View>
-                </View>
-
-                {/* Categories */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Manage Categories</Text>
-                    
-                    <Text style={styles.helperText}>Select account to manage categories for:</Text>
-                    <View style={styles.accountSelector}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            {state.accounts.filter(a => !a.archived).map(acct => {
-                                const isSelected = effectiveCatAccountId === acct.id;
-                                return (
-                                    <TouchableOpacity 
-                                        key={acct.id} 
-                                        style={[styles.accountPill, isSelected && styles.accountPillActive]}
-                                        onPress={() => {
-                                            setCatAccountId(acct.id);
-                                            actions.switchAccount(acct.id); // Sync globally for Analytics
-                                        }}
-                                    >
-                                        <Text style={[styles.accountPillText, isSelected && styles.accountPillTextActive]}>{acct.name}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
-                    </View>
-
-                    <View style={styles.row}>
-                        <TextInput 
-                            style={styles.input}
-                            placeholder="New Category"
-                            value={newCategory}
-                            onChangeText={setNewCategory}
-                        />
-                        <TouchableOpacity style={styles.btnSmall} onPress={handleAddCategory}>
-                            <Text style={styles.btnText}>Add</Text>
-                        </TouchableOpacity>
-                     </View>
-                      <View style={styles.catList}>
-                        {selectedAccount?.categories.map(c => {
-                             const val = localBudgets[c] || '';
-                            return (
-                                <View key={c} style={styles.catItem}>
-                                    <View style={{flex: 1}}>
-                                        <Text style={styles.catItemText}>{c}</Text>
-                                    </View>
-                                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
-                                        <Text style={{color: COLORS.text, fontSize: 12}}>{currencySymbol}</Text>
-                                        <TextInput 
-                                            style={styles.budgetInput}
-                                            placeholder="0.00"
-                                            keyboardType="decimal-pad"
-                                            value={val}
-                                            onChangeText={(text) => {
-                                                const sanitized = text.replace(/[^0-9.]/g, '');
-                                                if (sanitized.split('.').length > 2) return;
-                                                setLocalBudgets(prev => ({ ...prev, [c]: sanitized }));
-                                                setBudgetsModified(true);
-                                            }}
-                                            returnKeyType="done"
-                                        />
-                                        <TouchableOpacity onPress={() => {
-                                            if (selectedAccount) {
-                                                Alert.alert("Delete Category", `Remove ${c}?`, [
-                                                    { text: "Cancel" },
-                                                    { text: "Delete", style: 'destructive', onPress: () => actions.deleteCategory(c, selectedAccount.id) }
-                                                ]);
-                                            }
-                                        }}>
-                                            <Text style={{color: COLORS.danger}}>Delete</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-                            );
-                        })}
-                      </View>
-
-                      {budgetsModified && (
-                          <TouchableOpacity 
-                              style={[styles.actionBtn, { marginTop: 20 }]} 
-                              onPress={handleSaveBudgets}
-                          >
-                              <Text style={styles.actionBtnText}>Save Budget Goals</Text>
-                          </TouchableOpacity>
-                      )}
-                </View>
-
-                {/* Data Management */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Data Management</Text>
-                    <TouchableOpacity style={styles.actionBtn} onPress={handleExportExcel}>
-                        <Text style={styles.actionBtnText}>Export to Excel (.xlsx)</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.actionBtn, styles.dangerBtn]} onPress={handleResetMonth}>
-                        <Text style={[styles.actionBtnText, styles.dangerBtnText]}>Reset Current Month</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Security */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Security</Text>
+                    <View style={styles.separator} />
                     <View style={styles.securityRow}>
-                        <View>
-                            <Text style={styles.securityLabel}>Use Biometrics</Text>
-                            <Text style={styles.securityDesc}>Prompt for FaceID/Fingerprint on app start</Text>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.settingLabel}>Biometric Auth</Text>
+                            <Text style={styles.settingDesc}>Use FaceID or Fingerprint</Text>
                         </View>
                         <Switch 
                             value={useBiometrics}
@@ -494,7 +309,152 @@ export default function SettingsScreen() {
                     </View>
                 </View>
 
-                <View style={{ height: 40 }} />
+                {/* Section: Accounts */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Ionicons name="card-outline" size={20} color={COLORS.primary} style={styles.sectionIcon} />
+                        <Text style={styles.sectionTitle}>Accounts</Text>
+                    </View>
+                    <View style={styles.addAccountBox}>
+                        <TextInput 
+                            style={styles.inputFull}
+                            placeholder="Account Name (e.g. HDFC, Cash)"
+                            value={newAccountName}
+                            onChangeText={setNewAccountName}
+                        />
+                        <View style={styles.pillsContainerSmall}>
+                            {accountTypes.map(type => (
+                                <TouchableOpacity 
+                                    key={type}
+                                    style={[styles.miniPill, newAccountType === type && styles.miniPillActive]}
+                                    onPress={() => setNewAccountType(type)}
+                                >
+                                    <Text style={[styles.miniPillText, newAccountType === type && styles.miniPillTextActive]}>{type}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <TouchableOpacity style={styles.btnFull} onPress={handleAddAccount}>
+                            <Text style={styles.btnText}>+ Add New Account</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.accountList}>
+                        {state.accounts.map(acct => (
+                            <View key={acct.id} style={styles.accountItem}>
+                                <View style={styles.accountIconBg}>
+                                    <Ionicons name={acct.type === 'Credit Card' ? 'card' : 'business'} size={18} color={COLORS.primary} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    {renamingAccountId === acct.id ? (
+                                        <View style={styles.renameGroup}>
+                                            <TextInput 
+                                                style={styles.renameInput}
+                                                value={renamingName}
+                                                onChangeText={setRenamingName}
+                                                autoFocus
+                                            />
+                                            <TouchableOpacity onPress={submitRename}>
+                                                <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ) : (
+                                        <>
+                                            <Text style={styles.accountName}>{acct.name}</Text>
+                                            <Text style={styles.accountMeta}>{acct.type}{acct.archived ? ' • Archived' : ''}</Text>
+                                        </>
+                                    )}
+                                </View>
+                                <View style={styles.actionRow}>
+                                    <TouchableOpacity onPress={() => handleRenameAccount(acct.id, acct.name)} style={styles.iconAction}>
+                                        <Ionicons name="pencil-outline" size={18} color={COLORS.primary} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => actions.archiveAccount(acct.id, !acct.archived)} style={styles.iconAction}>
+                                        <Ionicons name={acct.archived ? "refresh-outline" : "archive-outline"} size={18} color={acct.archived ? COLORS.success : COLORS.muted} />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                </View>
+
+                {/* Section: Categories */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Ionicons name="apps-outline" size={20} color={COLORS.primary} style={styles.sectionIcon} />
+                        <Text style={styles.sectionTitle}>Categories & Budgets</Text>
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.accountSelector}>
+                        {state.accounts.filter(a => !a.archived).map(acct => (
+                            <TouchableOpacity 
+                                key={acct.id} 
+                                style={[styles.accountPill, effectiveCatAccountId === acct.id && styles.accountPillActive]}
+                                onPress={() => setCatAccountId(acct.id)}
+                            >
+                                <Text style={[styles.accountPillText, effectiveCatAccountId === acct.id && styles.accountPillTextActive]}>{acct.name}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                    <View style={styles.inputGroup}>
+                        <TextInput 
+                            style={[styles.input, { flex: 1 }]}
+                            placeholder="New category name"
+                            value={newCategory}
+                            onChangeText={setNewCategory}
+                        />
+                        <TouchableOpacity style={styles.btnSmall} onPress={handleAddCategory}>
+                            <Text style={styles.btnText}>Add</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.catSummary}>
+                        <Text style={styles.catSummaryText}>{selectedAccount?.categories.length || 0} Categories Defined</Text>
+                    </View>
+                    <View style={styles.catGrid}>
+                        {selectedAccount?.categories.map(c => (
+                            <View key={c} style={styles.catRow}>
+                                <Text style={styles.catRowText}>{c}</Text>
+                                <View style={styles.budgetEditRow}>
+                                    <Text style={styles.miniCurrency}>{currencySymbol}</Text>
+                                    <TextInput 
+                                        style={styles.budgetInputSmall}
+                                        placeholder="0"
+                                        keyboardType="decimal-pad"
+                                        value={localBudgets[c] || ''}
+                                        onChangeText={(text) => {
+                                            setLocalBudgets(prev => ({ ...prev, [c]: text.replace(/[^0-9.]/g, '') }));
+                                            setBudgetsModified(true);
+                                        }}
+                                    />
+                                    <TouchableOpacity onPress={() => actions.deleteCategory(c, selectedAccount.id)} style={styles.catDeleteBtn}>
+                                        <Ionicons name="close-circle" size={20} color={COLORS.danger} />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                    {budgetsModified && (
+                        <TouchableOpacity style={styles.saveBudgetBtn} onPress={handleSaveBudgets}>
+                            <LinearGradient colors={COLORS.gradientSuccess} style={styles.gradientBtn}>
+                                <Text style={styles.btnText}>Save Budget Goals</Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Section: Data */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Ionicons name="cloud-download-outline" size={20} color={COLORS.primary} style={styles.sectionIcon} />
+                        <Text style={styles.sectionTitle}>Data Management</Text>
+                    </View>
+                    <TouchableOpacity style={styles.dataActionBtn} onPress={handleExportExcel}>
+                        <Ionicons name="document-text-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                        <Text style={styles.dataActionText}>Export Data (Excel)</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.dataActionBtn, { backgroundColor: COLORS.danger }]} onPress={handleResetMonth}>
+                        <Ionicons name="trash-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                        <Text style={styles.dataActionText}>Reset Current Month</Text>
+                    </TouchableOpacity>
+                </View>
+
             </ScrollView>
         </SafeAreaView>
     );
@@ -504,53 +464,134 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.bg,
-        padding: SIZES.padding,
+    },
+    header: {
+        paddingHorizontal: SIZES.padding,
+        paddingTop: 10,
+        marginBottom: 20,
     },
     headerTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
+        fontSize: 28,
+        fontWeight: '800',
         color: COLORS.text,
+        letterSpacing: -0.5,
         marginBottom: 20,
+    },
+    userCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 20,
+        borderRadius: SIZES.radiusLarge,
+        ...SHADOWS.medium,
+    },
+    userIconBg: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+    },
+    userInfo: {
+        flex: 1,
+    },
+    userEmail: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#fff',
+    },
+    userName: {
+        fontSize: 13,
+        color: 'rgba(255,255,255,0.7)',
+        fontWeight: '500',
+    },
+    signOutBtn: {
+        padding: 10,
     },
     section: {
         backgroundColor: COLORS.surface,
-        borderRadius: SIZES.radius,
-        padding: 16,
+        marginHorizontal: SIZES.padding,
+        borderRadius: SIZES.radiusLarge,
+        padding: 20,
         marginBottom: 20,
+        ...SHADOWS.small,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    sectionIcon: {
+        marginRight: 10,
     },
     sectionTitle: {
         fontSize: 18,
-        fontWeight: '600',
+        fontWeight: '700',
         color: COLORS.text,
-        marginBottom: 12,
     },
     helperText: {
         fontSize: 13,
-        color: COLORS.muted,
-        marginBottom: 8,
+        color: COLORS.textLight,
+        marginBottom: 10,
     },
-    row: {
+    accountSelector: {
+        flexDirection: 'row',
+        marginBottom: 16,
+    },
+    accountPill: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: SIZES.radiusFull,
+        backgroundColor: COLORS.bg,
+        marginRight: 10,
+    },
+    accountPillActive: {
+        backgroundColor: COLORS.primary,
+    },
+    accountPillText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: COLORS.textLight,
+    },
+    accountPillTextActive: {
+        color: '#fff',
+    },
+    inputGroup: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    inputWithIcon: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        marginBottom: 12,
+        backgroundColor: COLORS.bg,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+    },
+    currencyPrefix: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: COLORS.text,
+        marginRight: 8,
     },
     input: {
         flex: 1,
-        backgroundColor: COLORS.bg,
-        padding: 12,
-        borderRadius: 8,
+        paddingVertical: 12,
         fontSize: 16,
+        color: COLORS.text,
     },
     btnSmall: {
         backgroundColor: COLORS.primary,
-        paddingVertical: 12,
         paddingHorizontal: 16,
-        borderRadius: 8,
+        borderRadius: 12,
+        justifyContent: 'center',
+        ...SHADOWS.small,
     },
     btnText: {
         color: '#fff',
-        fontWeight: '600',
+        fontWeight: '700',
+        fontSize: 14,
     },
     pillsContainer: {
         flexDirection: 'row',
@@ -558,188 +599,197 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     pill: {
+        paddingHorizontal: 14,
         paddingVertical: 8,
-        paddingHorizontal: 16,
-        borderRadius: 20,
+        borderRadius: 12,
         backgroundColor: COLORS.bg,
     },
     pillActive: {
         backgroundColor: COLORS.primary,
     },
     pillText: {
+        fontSize: 13,
         color: COLORS.text,
+        fontWeight: '600',
     },
     pillTextActive: {
         color: '#fff',
     },
-    catList: {
-        marginTop: 8,
-    },
-    catItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.bg,
-    },
-    catItemText: {
-        fontSize: 16,
-        color: COLORS.text,
-    },
-    accountSelector: {
-        marginBottom: 15,
-        marginTop: 5,
-    },
-    accountPill: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        backgroundColor: COLORS.bg,
-        marginRight: 8,
-        borderWidth: 1,
-        borderColor: COLORS.bg,
-    },
-    accountPillActive: {
-        backgroundColor: COLORS.primary,
-        borderColor: COLORS.primary,
-    },
-    accountPillText: {
-        fontSize: 12,
-        color: COLORS.text,
-    },
-    accountPillTextActive: {
-        color: '#fff',
-        fontWeight: '600',
-    },
-    renameContainer: {
-        flex: 1,
-        flexDirection: 'column',
-    },
-    renameInput: {
-        backgroundColor: COLORS.bg,
-        padding: 5,
-        borderRadius: 4,
-        fontSize: 14,
-        marginBottom: 5,
-        color: COLORS.text,
-    },
-    saveRenameText: {
-        color: COLORS.success,
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    cancelRenameText: {
-        color: COLORS.muted,
-        fontSize: 12,
-    },
-    budgetInput: {
-        backgroundColor: COLORS.bg,
-        padding: 8,
-        borderRadius: 6,
-        fontSize: 14,
-        width: 80,
-    },
-    accountList: {
-        marginTop: 12,
-    },
-    accountItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.bg,
-    },
-    accountName: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: COLORS.text,
-    },
-    accountMeta: {
-        fontSize: 12,
-        color: COLORS.muted,
-        marginTop: 2,
-    },
-    actionBtn: {
-        backgroundColor: COLORS.primary,
-        padding: 14,
-        borderRadius: 8,
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    actionBtnText: {
-        color: '#fff',
-        fontWeight: '600',
-        fontSize: 16,
-    },
-    dangerBtn: {
-        backgroundColor: COLORS.danger,
-    },
-    dangerBtnText: {
-        color: '#fff',
+    separator: {
+        height: 1,
+        backgroundColor: COLORS.border,
+        marginVertical: 16,
     },
     securityRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.bg,
     },
-    securityLabel: {
-        fontSize: 16,
-        fontWeight: '500',
+    settingLabel: {
+        fontSize: 15,
+        fontWeight: '600',
         color: COLORS.text,
     },
-    securityDesc: {
+    settingDesc: {
         fontSize: 12,
         color: COLORS.muted,
-        marginTop: 2,
     },
-    userSection: {
-        marginTop: 16,
-        padding: 12,
-        backgroundColor: COLORS.bg,
-        borderRadius: 12,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    formGroupVertical: {
-        flexDirection: 'column',
-        gap: 10,
-        marginBottom: 10,
+    addAccountBox: {
+        gap: 12,
+        marginBottom: 20,
     },
     inputFull: {
         backgroundColor: COLORS.bg,
+        borderRadius: 12,
         padding: 12,
-        borderRadius: 8,
-        fontSize: 16,
+        fontSize: 15,
         color: COLORS.text,
     },
-    currencyPrefix: {
-        fontSize: 16,
-        color: COLORS.text,
-        fontWeight: 'bold',
+    pillsContainerSmall: {
+        flexDirection: 'row',
+        gap: 8,
     },
-    userInfo: {
-        flex: 1,
+    miniPill: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 10,
+        backgroundColor: COLORS.bg,
     },
-    userEmail: {
-        fontSize: 14,
-        color: COLORS.text,
+    miniPillActive: {
+        backgroundColor: COLORS.primaryLight,
+    },
+    miniPillText: {
+        fontSize: 11,
         fontWeight: '600',
+        color: COLORS.textLight,
     },
-    userName: {
+    miniPillTextActive: {
+        color: COLORS.primary,
+    },
+    btnFull: {
+        backgroundColor: COLORS.primary,
+        padding: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        ...SHADOWS.small,
+    },
+    accountList: {
+        gap: 10,
+    },
+    accountItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        backgroundColor: COLORS.bg,
+        borderRadius: 14,
+    },
+    accountIconBg: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: COLORS.surface,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    accountName: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    accountMeta: {
+        fontSize: 11,
+        color: COLORS.textLight,
+    },
+    renameGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    renameInput: {
+        flex: 1,
+        backgroundColor: COLORS.surface,
+        padding: 6,
+        borderRadius: 8,
+        color: COLORS.text,
+    },
+    actionRow: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    iconAction: {
+        padding: 6,
+    },
+    catSummary: {
+        marginVertical: 12,
+    },
+    catSummaryText: {
         fontSize: 12,
+        fontWeight: '700',
         color: COLORS.muted,
+        textTransform: 'uppercase',
     },
-    signOutBtn: {
-        paddingVertical: 8,
-        paddingHorizontal: 12,
+    catGrid: {
+        gap: 10,
     },
-    signOutText: {
-        color: COLORS.danger,
-        fontWeight: 'bold',
-    }
+    catRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 10,
+        backgroundColor: COLORS.bg,
+        borderRadius: 12,
+    },
+    catRowText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    budgetEditRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    miniCurrency: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: COLORS.textLight,
+    },
+    budgetInputSmall: {
+        width: 60,
+        padding: 4,
+        backgroundColor: COLORS.surface,
+        borderRadius: 8,
+        fontSize: 13,
+        fontWeight: '600',
+        color: COLORS.text,
+        textAlign: 'right',
+    },
+    catDeleteBtn: {
+        marginLeft: 4,
+    },
+    saveBudgetBtn: {
+        marginTop: 20,
+        borderRadius: 12,
+        overflow: 'hidden',
+        ...SHADOWS.small,
+    },
+    gradientBtn: {
+        padding: 14,
+        alignItems: 'center',
+    },
+    dataActionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: COLORS.primary,
+        padding: 16,
+        borderRadius: 14,
+        marginBottom: 12,
+        ...SHADOWS.small,
+    },
+    dataActionText: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '700',
+    },
 });

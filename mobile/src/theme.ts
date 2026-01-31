@@ -30,13 +30,13 @@ export const COLORS = {
   textDark: '#f8fafc',
   
   // Gradients
-  gradientPrimary: ['#6366f1', '#a855f7'],
-  gradientSecondary: ['#ec4899', '#f43f5e'],
-  gradientSuccess: ['#10b981', '#34d399'],
-  gradientDanger: ['#ef4444', '#f87171'],
-  gradientWarning: ['#f59e0b', '#fbbf24'],
-  gradientNeutral: ['#94a3b8', '#cbd5e1'],
-  gradientGlass: ['rgba(255, 255, 255, 0.9)', 'rgba(255, 255, 255, 0.7)'],
+  gradientPrimary: ['#6366f1', '#a855f7'] as const,
+  gradientSecondary: ['#ec4899', '#f43f5e'] as const,
+  gradientSuccess: ['#10b981', '#34d399'] as const,
+  gradientDanger: ['#ef4444', '#f87171'] as const,
+  gradientWarning: ['#f59e0b', '#fbbf24'] as const,
+  gradientNeutral: ['#94a3b8', '#cbd5e1'] as const,
+  gradientGlass: ['rgba(255, 255, 255, 0.9)', 'rgba(255, 255, 255, 0.7)'] as const,
 };
 
 export const SIZES = {
@@ -91,11 +91,31 @@ export const SHADOWS = {
     shadowRadius: 30,
     elevation: 10,
   },
-  colored: (color) => ({
+  colored: (color: string) => ({
     shadowColor: color,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 8,
   }),
+};
+
+export const CATEGORY_ICONS: { [key: string]: string } = {
+  'Food': 'restaurant',
+  'Groceries': 'cart',
+  'Rent': 'home',
+  'Utilities': 'flash',
+  'Transport': 'car',
+  'Shopping': 'bag-handle',
+  'Health': 'medical',
+  'Education': 'book',
+  'Entertainment': 'game-controller',
+  'Other': 'options',
+  'Salary': 'cash',
+  'Fuel': 'speedometer',
+  'Dining': 'pizza',
+  'Sub': 'tv',
+  'Gifts': 'gift',
+  'Investment': 'trending-up',
+  'Insurance': 'shield-checkmark',
 };

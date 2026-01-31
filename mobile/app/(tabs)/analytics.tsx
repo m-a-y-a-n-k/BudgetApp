@@ -1,29 +1,30 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Dimensions, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PieChart, BarChart } from 'react-native-chart-kit';
+import { PieChart } from 'react-native-chart-kit';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useBudgetData } from '../../src/hooks/useBudgetData';
-import { COLORS, SIZES } from '../../src/theme';
+import { COLORS, SIZES, SHADOWS, CATEGORY_ICONS } from '../../src/theme';
 
-const screenWidth = Dimensions.get('window').width;
+const { width: screenWidth } = Dimensions.get('window');
+
+
 
 const chartConfig = {
   backgroundGradientFrom: COLORS.surface,
   backgroundGradientTo: COLORS.surface,
-  color: (opacity = 1) => `rgba(37, 99, 235, ${opacity})`,
-  strokeWidth: 2, // optional, default 3
-  barPercentage: 0.5,
-  useShadowColorFromDataset: false, // optional
+  color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
   labelColor: (opacity = 1) => COLORS.text,
+  strokeWidth: 2,
 };
 
-import { BudgetState, Expense, AccountData } from '../../src/types';
+import { Expense, AccountData } from '../../src/types';
 
 export default function AnalyticsScreen() {
     const { state, loading, currentMonth, currencySymbol, actions } = useBudgetData();
 
-    // Reload data when screen comes into focus
     useFocusEffect(
         React.useCallback(() => {
             actions.loadData();
@@ -42,13 +43,11 @@ export default function AnalyticsScreen() {
     let categoryTotals: { [key: string]: number } = {};
     let totalExpense = 0;
 
-    // Aggregate categories and budgets
     let aggregatedBudgets: { [key: string]: number } = {};
     Object.entries(monthData.accounts).forEach(([acctId, acct]) => {
         const id = parseInt(acctId);
         if (state.activeAccountId !== 'all' && state.activeAccountId !== id) return;
 
-        // Total Expenses
         (acct as AccountData).expenses.forEach((exp: Expense) => {
             const cat = exp.category ? exp.category[0] : 'Other';
             const val = exp.amount || 0;
@@ -56,218 +55,272 @@ export default function AnalyticsScreen() {
             totalExpense += val;
         });
 
-        // Aggregated Budgets
         const budgets = (acct as AccountData).categoryBudgets || {};
         Object.keys(budgets).forEach(cat => {
             aggregatedBudgets[cat] = (aggregatedBudgets[cat] || 0) + budgets[cat];
         });
     });
 
-    // Sort categories by expenditure
     const allCategories = Array.from(new Set([...Object.keys(categoryTotals), ...Object.keys(aggregatedBudgets)]))
         .sort((a, b) => (categoryTotals[b] || 0) - (categoryTotals[a] || 0));
 
-    // Prepare Pie Chart Data
+    const pieColors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#8b5cf6', '#f43f5e'];
     const pieData = Object.keys(categoryTotals).map((cat, index) => {
-        const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4']; 
         return {
             name: cat,
             population: categoryTotals[cat],
-            color: colors[index % colors.length],
-            legendFontColor: COLORS.text,
+            color: pieColors[index % pieColors.length],
+            legendFontColor: COLORS.textLight,
             legendFontSize: 12
         };
     }).sort((a,b) => b.population - a.population);
 
     return (
         <SafeAreaView style={styles.container}>
-            <ScrollView>
+            <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.header}>
                     <View>
                         <Text style={styles.headerTitle}>Analytics</Text>
-                        <Text style={styles.subHeader}>{currentMonth}</Text>
-                    </View>
-                    <View style={styles.accountSelector}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            <TouchableOpacity 
-                                style={[styles.accountBadge, state.activeAccountId === 'all' && styles.accountBadgeActive]}
-                                onPress={() => actions.switchAccount('all')}
-                            >
-                                <Text style={[styles.accountBadgeText, state.activeAccountId === 'all' && styles.accountBadgeTextActive]}>All</Text>
-                            </TouchableOpacity>
-                            {state.accounts.filter(a => !a.archived).map(acct => (
-                                <TouchableOpacity 
-                                    key={acct.id}
-                                    style={[styles.accountBadge, state.activeAccountId === acct.id && styles.accountBadgeActive]}
-                                    onPress={() => actions.switchAccount(acct.id)}
-                                >
-                                    <Text style={[styles.accountBadgeText, state.activeAccountId === acct.id && styles.accountBadgeTextActive]}>{acct.name}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
+                        <View style={styles.monthTag}>
+                            <Ionicons name="calendar-outline" size={14} color={COLORS.primary} />
+                            <Text style={styles.monthTagText}>{currentMonth}</Text>
+                        </View>
                     </View>
                 </View>
 
+                <View style={styles.accountSelector}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: SIZES.padding }}>
+                        <TouchableOpacity 
+                            style={[styles.accountBadge, state.activeAccountId === 'all' && styles.accountBadgeActive]}
+                            onPress={() => actions.switchAccount('all')}
+                        >
+                            <Text style={[styles.accountBadgeText, state.activeAccountId === 'all' && styles.accountBadgeTextActive]}>All Accounts</Text>
+                        </TouchableOpacity>
+                        {state.accounts.filter(a => !a.archived).map(acct => (
+                            <TouchableOpacity 
+                                key={acct.id}
+                                style={[styles.accountBadge, state.activeAccountId === acct.id && styles.accountBadgeActive]}
+                                onPress={() => actions.switchAccount(acct.id)}
+                            >
+                                <Text style={[styles.accountBadgeText, state.activeAccountId === acct.id && styles.accountBadgeTextActive]}>{acct.name}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Spending by Category</Text>
+                    <Text style={styles.sectionTitle}>Expense Breakdown</Text>
                     {totalExpense > 0 ? (
-                         <PieChart
-                            data={pieData}
-                            width={screenWidth - SIZES.padding * 2}
-                            height={220}
-                            chartConfig={chartConfig}
-                            accessor={"population"}
-                            backgroundColor={"transparent"}
-                            paddingLeft={"15"}
-                            center={[10, 0]}
-                            absolute
-                        />
+                        <View style={styles.chartContainer}>
+                            <PieChart
+                                data={pieData}
+                                width={screenWidth - SIZES.padding * 2 - 32}
+                                height={200}
+                                chartConfig={chartConfig}
+                                accessor={"population"}
+                                backgroundColor={"transparent"}
+                                paddingLeft={"0"}
+                                center={[0, 0]}
+                                absolute
+                            />
+                        </View>
                     ) : (
-                        <Text style={styles.emptyText}>No data to display</Text>
+                        <View style={styles.emptyChart}>
+                            <Ionicons name="pie-chart-outline" size={48} color={COLORS.muted} />
+                            <Text style={styles.emptyText}>No expenses logged this month</Text>
+                        </View>
                     )}
                 </View>
 
-                {/* Budget Progress */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Budget Goals</Text>
+                    <Text style={styles.sectionTitle}>Budget Progress</Text>
                     {allCategories.length === 0 ? (
-                        <Text style={styles.emptyText}>No spending yet</Text>
+                        <Text style={styles.emptyText}>Start adding expenses to see progress</Text>
                     ) : (
-                        allCategories.map(cat => {
+                        allCategories.map((cat, index) => {
                             const spent = categoryTotals[cat] || 0;
                             const budget = aggregatedBudgets[cat] || 0;
-                            
-                            // Calculate percentage for progress bar (capped at 100)
                             const displayPct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
-                            // Calculate actual percentage for text and color
                             const actualPct = budget > 0 ? (spent / budget) * 100 : 0;
+                            const iconName = CATEGORY_ICONS[cat] || 'apps-outline';
                             
                             let color = COLORS.success;
-                            if (actualPct >= 75) color = COLORS.warning;
-                            if (actualPct > 100) color = COLORS.danger;
+                            let bgColor = COLORS.successLight;
+                            if (actualPct >= 75) { color = COLORS.warning; bgColor = COLORS.warningLight; }
+                            if (actualPct > 100) { color = COLORS.danger; bgColor = COLORS.dangerLight; }
 
                             return (
-                                <View key={cat} style={styles.budgetRow}>
-                                    <View style={styles.budgetHeader}>
-                                        <Text style={styles.budgetCat}>{cat}</Text>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <Text style={[styles.budgetVal, { fontWeight: '600', color: color, marginRight: 8 }]}>
-                                                {budget > 0 ? `${actualPct.toFixed(0)}%` : 'No Budget'}
-                                            </Text>
-                                            <Text style={styles.budgetVal}>
-                                                {currencySymbol}{spent.toFixed(0)} {budget > 0 ? `/ ${currencySymbol}${budget}` : ''}
+                                <View key={cat} style={styles.budgetCard}>
+                                    <View style={styles.budgetInfo}>
+                                        <View style={[styles.catIconBox, { backgroundColor: COLORS.bg }]}>
+                                            <Ionicons name={iconName as any} size={20} color={COLORS.primary} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={styles.budgetCardHeader}>
+                                                <Text style={styles.catName}>{cat}</Text>
+                                                <Text style={[styles.pctText, { color }]}>{actualPct.toFixed(0)}%</Text>
+                                            </View>
+                                            <View style={styles.progressBarWrapper}>
+                                                <View style={styles.progressBarBg}>
+                                                    <LinearGradient
+                                                        colors={actualPct > 100 ? COLORS.gradientDanger : actualPct > 75 ? COLORS.gradientWarning : COLORS.gradientSuccess}
+                                                        start={{ x: 0, y: 0 }}
+                                                        end={{ x: 1, y: 0 }}
+                                                        style={[styles.progressBarFill, { width: `${displayPct}%` }]}
+                                                    />
+                                                </View>
+                                            </View>
+                                            <Text style={styles.budgetAmount}>
+                                                {currencySymbol}{spent.toFixed(0)} spent {budget > 0 ? `of ${currencySymbol}${budget}` : ''}
                                             </Text>
                                         </View>
                                     </View>
-                                    {budget > 0 && (
-                                        <View style={styles.progressBarBg}>
-                                            <View style={[styles.progressBarFill, { width: `${displayPct}%`, backgroundColor: color }]} />
-                                        </View>
-                                    )}
                                 </View>
                             );
                         })
                     )}
                 </View>
-
+                <View style={{ height: 100 }} />
             </ScrollView>
         </SafeAreaView>
     );
-
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.bg,
-        padding: SIZES.padding,
     },
     center: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: COLORS.text,
-    },
-    subHeader: {
-        fontSize: 14,
-        color: COLORS.muted,
+        backgroundColor: COLORS.bg,
     },
     header: {
-        marginBottom: 20,
+        paddingHorizontal: SIZES.padding,
+        paddingTop: 10,
+        marginBottom: 10,
+    },
+    headerTitle: {
+        fontSize: 28,
+        fontWeight: '800',
+        color: COLORS.text,
+        letterSpacing: -0.5,
+    },
+    monthTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.surface,
+        alignSelf: 'flex-start',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        marginTop: 6,
+        ...SHADOWS.small,
+    },
+    monthTagText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: COLORS.primary,
+        marginLeft: 4,
     },
     accountSelector: {
-        marginTop: 12,
-        flexDirection: 'row',
+        marginVertical: 16,
     },
     accountBadge: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: SIZES.radiusFull,
         backgroundColor: COLORS.surface,
-        marginRight: 8,
-        borderWidth: 1,
-        borderColor: COLORS.border,
+        marginRight: 10,
+        ...SHADOWS.small,
     },
     accountBadgeActive: {
         backgroundColor: COLORS.primary,
-        borderColor: COLORS.primary,
     },
     accountBadgeText: {
-        fontSize: 12,
-        color: COLORS.text,
+        fontSize: 13,
+        color: COLORS.textLight,
+        fontWeight: '600',
     },
     accountBadgeTextActive: {
         color: '#fff',
-        fontWeight: 'bold',
     },
     section: {
+        marginHorizontal: SIZES.padding,
         backgroundColor: COLORS.surface,
-        borderRadius: SIZES.radius,
-        padding: 16,
+        borderRadius: SIZES.radiusLarge,
+        padding: 20,
         marginBottom: 20,
+        ...SHADOWS.small,
     },
     sectionTitle: {
         fontSize: 18,
-        fontWeight: '600',
+        fontWeight: '700',
         color: COLORS.text,
-        marginBottom: 12,
-        alignSelf: 'flex-start'
+        marginBottom: 20,
+    },
+    chartContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    emptyChart: {
+        alignItems: 'center',
+        paddingVertical: 30,
     },
     emptyText: {
         color: COLORS.muted,
-        padding: 20,
+        marginTop: 10,
         textAlign: 'center',
-        width: '100%'
+        fontSize: 14,
     },
-    budgetRow: {
-        marginBottom: 12,
+    budgetCard: {
+        marginBottom: 20,
     },
-    budgetHeader: {
+    budgetInfo: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    catIconBox: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+    },
+    budgetCardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 4,
+        alignItems: 'center',
+        marginBottom: 8,
     },
-    budgetCat: {
-        fontWeight: '500',
+    catName: {
+        fontSize: 15,
+        fontWeight: '600',
         color: COLORS.text,
     },
-    budgetVal: {
-        color: COLORS.muted,
-        fontSize: 12,
+    pctText: {
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    progressBarWrapper: {
+        marginBottom: 6,
     },
     progressBarBg: {
-        height: 10,
+        height: 6,
         backgroundColor: COLORS.bg,
-        borderRadius: 5,
+        borderRadius: 3,
         overflow: 'hidden',
-        marginTop: 4,
     },
     progressBarFill: {
         height: '100%',
         borderRadius: 3,
-    }
+    },
+    budgetAmount: {
+        fontSize: 12,
+        color: COLORS.textLight,
+        fontWeight: '500',
+    },
 });
